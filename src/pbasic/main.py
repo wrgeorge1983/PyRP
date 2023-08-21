@@ -23,14 +23,14 @@ import time
 
 from .rib import RIBRouteEntry
 from src.fp_interface import ForwardingPlane
-from system import SourceCode, RouteStatus, Route
+from system import SourceCode, RouteStatus, Route, IPNetwork
 
 
 class PBRoute(Route):
-    def __init__(self, prefix: str, next_hop: str, metric: int, threshold_ms: int):
+    def __init__(self, prefix: str, next_hop: str, priority: int, threshold_ms: int):
         super().__init__(prefix, next_hop)
         self.source = SourceCode.BASIC
-        self.metric = metric
+        self.priority = priority
         self.threshold_ms = threshold_ms
         self.status = RouteStatus.UNKNOWN
         self.last_updated = time.time()
@@ -55,9 +55,9 @@ class RoutingProtocolBasic:
     def up_routes(self):
         return [route for route in self._configured_routes if route.status == RouteStatus.UP]
 
-    def add_confiugred_route(self, route: Route, metric: int, threshold_ms: int):
+    def add_confiugred_route(self, route: Route, priority: int, threshold_ms: int):
         """configure_route will add the given route to the RIB."""
-        pb_route = PBRoute(route.prefix, route.next_hop, metric, threshold_ms)
+        pb_route = PBRoute(route.prefix, route.next_hop, priority, threshold_ms)
         self._configured_routes.add(pb_route)
 
     def remove_configured_route(self, route: Route):
@@ -88,5 +88,18 @@ class RoutingProtocolBasic:
         for pb_route in self._configured_routes:
             self.evaluate_route(pb_route)
 
+    def export_routes(self) -> set[PBRoute]:
+        """export_routes will return a set of only best routes (up, highest priority)."""
+        up_routes = self.up_routes
+
+        best_routes: dict[IPNetwork, PBRoute] = dict()
+        for route in up_routes:
+            if route.prefix not in best_routes:
+                best_routes[route.prefix] = route
+            else:
+                if route.priority > best_routes[route.prefix].priority:
+                    best_routes[route.prefix] = route
+
+        return set(best_routes.values())
 
 

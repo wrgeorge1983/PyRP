@@ -10,14 +10,14 @@ class RIBRouteEntry:
         prefix: IPNetwork,
         next_hop: IPAddress,
         source: SourceCode,
-        priority: int,
+        metric: int,
         status: RouteStatus,
         threshold_ms: int,
     ):
         self.prefix = prefix
         self.next_hop = next_hop
         self.source = source
-        self.metric = priority
+        self.metric = metric
         self.status = status
         self.threshold_ms = threshold_ms
         self.last_updated = time.time()
