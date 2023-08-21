@@ -21,6 +21,7 @@ since this protocol does not have redistribution, it will only have configured r
 
 import time
 
+from config import Config
 from .rib import RIBRouteEntry
 from src.fp_interface import ForwardingPlane
 from system import SourceCode, RouteStatus, Route, IPNetwork
@@ -56,6 +57,15 @@ class RoutingProtocolBasic:
         self._configured_routes: set[PBRoute] = set()
         self._threshold_measure_interval = threshold_measure_interval
         self.admin_distance = admin_distance
+
+    @classmethod
+    def from_config(cls, config: Config, fp: ForwardingPlane):
+        return cls(
+            fp,
+            config.pbasic.get("threshold_measure_interval", 60),
+            config.pbasic.get("admin_distance", 1)
+        )
+
 
     @property
     def configured_routes(self):

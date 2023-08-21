@@ -1,4 +1,5 @@
 import os
+from pprint import pprint
 
 import pytest
 
@@ -15,4 +16,7 @@ def get_path_to_config(filename: str):
 def test_config_load():
     cfg = Config()
     cfg.load(get_path_to_config("pbasic.toml"))
-    print(cfg._data)
+
+    assert cfg.pbasic["admin_distance"] == 1
+    assert cfg.pbasic["threshold_measure_interval"] == 60
+    assert len(cfg.pbasic["routes"]) == 4
