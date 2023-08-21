@@ -21,6 +21,7 @@ import time
 from src.fp_interface import ForwardingPlane
 from src.system import RouteStatus, SourceCode, Route, RIBRouteEntry, RIB
 
+
 class PRoute(Route):
     def __init__(self, prefix: str, next_hop: str, metric: int, threshold_ms: int):
         super().__init__(prefix, next_hop)
@@ -30,7 +31,6 @@ class PRoute(Route):
 
 
 class RoutingProtocolBasic:
-
     def __init__(self, fp: ForwardingPlane):
         self.fp = fp
         self.rib = RIB()
@@ -38,14 +38,18 @@ class RoutingProtocolBasic:
 
     def configure_route(self, route: Route):
         """configure_route will add the given route to the RIB."""
-        rib_route_entry = RIBRouteEntry(route.prefix, route.next_hop, SourceCode.BASIC, 1, 1, RouteStatus.DOWN)
+        rib_route_entry = RIBRouteEntry(
+            route.prefix, route.next_hop, SourceCode.BASIC, 1, 1, RouteStatus.DOWN
+        )
         self.rib.add_route_entry(rib_route_entry)
 
     def redistribute_in(self, routes: set[Route], source: SourceCode):
         """redistribute_in will replace all routes from the given source with the given routes."""
         self.rib.remove_route_entries_from_source(source)
         for route in routes:
-            rib_route_entry = RIBRouteEntry(route.prefix, route.next_hop, source, 1, 1, RouteStatus.UP)
+            rib_route_entry = RIBRouteEntry(
+                route.prefix, route.next_hop, source, 1, 1, RouteStatus.UP
+            )
             self.rib.add_route_entry(rib_route_entry)
 
     @property
@@ -53,11 +57,12 @@ class RoutingProtocolBasic:
         """_localRoutes will return all RIBRouteEntries that are sourced from this protocol."""
         return self.rib.rib_entries_from_search(source=SourceCode.BASIC)
 
-
-
     def evaluate_route(self, rib_route_entry: RIBRouteEntry):
         """evaluate_route will evaluate the given route in the RIB."""
-        if rib_route_entry.status == RouteStatus.UP or time.time() - rib_route_entry.last_updated > 60:
+        if (
+            rib_route_entry.status == RouteStatus.UP
+            or time.time() - rib_route_entry.last_updated > 60
+        ):
             rtt = self.fp.ping(rib_route_entry.next_hop)
             if rtt == -1:
                 rib_route_entry.status = RouteStatus.DOWN
@@ -70,4 +75,3 @@ class RoutingProtocolBasic:
         """evaluate_routes will evaluate all routes in the RIB."""
         for rib_route_entry in self.rib.routes:
             self.evaluate_route(rib_route_entry)
-    

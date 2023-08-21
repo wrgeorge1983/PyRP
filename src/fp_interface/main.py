@@ -5,15 +5,16 @@ import time
 import dpkt
 import socket
 
-class ForwardingPlane:
 
-    def __init__(self, sock = socket.socket):
+class ForwardingPlane:
+    def __init__(self, sock=socket.socket):
         self._sock = sock
+
     def _send_ping(self, dest_ip: str, timeout_seconds: int) -> float:
         icmp_echo = dpkt.icmp.ICMP.Echo()
         icmp_echo.id = random.randint(0, 65535)
         icmp_echo.seq = random.randint(0, 65535)
-        icmp_echo.data = b''
+        icmp_echo.data = b""
 
         icmp = dpkt.icmp.ICMP()
         icmp.type = dpkt.icmp.ICMP_ECHO
@@ -34,9 +35,9 @@ class ForwardingPlane:
         return self._send_ping(dest_ip, timeout_seconds)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     fp = ForwardingPlane()
-    rtt = fp.ping('8.8.8.8')
+    rtt = fp.ping("8.8.8.8")
 
-    print(f'RTT: {rtt * 1000:.2f}ms')
-    print('omfg!')
+    print(f"RTT: {rtt * 1000:.2f}ms")
+    print("omfg!")

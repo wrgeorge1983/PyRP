@@ -32,7 +32,15 @@ class Route:
 
 
 class RIBRouteEntry:
-    def __init__(self, prefix: IPNetwork, next_hop: IPAddress, source: SourceCode, metric: int, admin_distance: int, status: RouteStatus):
+    def __init__(
+        self,
+        prefix: IPNetwork,
+        next_hop: IPAddress,
+        source: SourceCode,
+        metric: int,
+        admin_distance: int,
+        status: RouteStatus,
+    ):
         self.prefix = prefix
         self.next_hop = next_hop
         self.source = source
@@ -58,7 +66,9 @@ class RIBRouteEntry:
 class RIB:
     """RIB is a Routing Information Base.  It is a database of routes.
     there is a primary dictionary mapping prefixes (IPNetworks) to a set of RIBRouteEntries.
-    there are additional secondary dictionaries mapping next hops (IPAddresses) and sources (SourceCodes) to a set of RIBRouteEntries."""
+    there are additional secondary dictionaries mapping next hops (IPAddresses) and sources (SourceCodes) to a set of RIBRouteEntries.
+    """
+
     def __init__(self):
         self._route_entries: set[RIBRouteEntry] = set()
         self.routes: dict[IPNetwork, set[RIBRouteEntry]] = {}
@@ -103,10 +113,17 @@ class RIB:
 
     def remove_route_entries_from_source(self, source: SourceCode):
         if source in self.sources:
-            for rib_route_entry in list(self.sources[source]):  # list() is needed to avoid modifying the set while iterating over it
+            for rib_route_entry in list(
+                self.sources[source]
+            ):  # list() is needed to avoid modifying the set while iterating over it
                 self.remove_route_entry(rib_route_entry)
 
-    def rib_entry_search(self, prefix: IPNetwork = None, next_hop: IPAddress = None, source: SourceCode = None) -> set[RIBRouteEntry]:
+    def rib_entry_search(
+        self,
+        prefix: IPNetwork = None,
+        next_hop: IPAddress = None,
+        source: SourceCode = None,
+    ) -> set[RIBRouteEntry]:
         """rib_entry_search will return a set of RIBRouteEntries that matches the given prefix, next_hop, and source (if given).
         If no arguments are given, all RIBRouteEntries will be returned"""
         rslt = set()
@@ -124,7 +141,12 @@ class RIB:
 
         return rslt
 
-    def rib_entries_from_search(self, prefix: IPNetwork = None, next_hop: IPAddress = None, source: SourceCode = None) -> set[RIBRouteEntry]:
+    def rib_entries_from_search(
+        self,
+        prefix: IPNetwork = None,
+        next_hop: IPAddress = None,
+        source: SourceCode = None,
+    ) -> set[RIBRouteEntry]:
         """rib_entries_from_search will return a set of RIBRouteEntries that matches the given prefix, next_hop, and source (if given).
         If no arguments are given, all RIBRouteEntries will be returned"""
         rslt = set()
