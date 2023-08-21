@@ -1,7 +1,8 @@
 from ipaddress import ip_network, ip_address
 
 import pytest
-from src.system import Route, RouteStatus, SourceCode, RIBRouteEntry, RIB
+from src.system import RouteStatus, SourceCode, Route
+from generic.rib import RIBRouteEntry, RIB
 
 
 @pytest.fixture
