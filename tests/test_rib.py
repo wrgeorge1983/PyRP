@@ -28,6 +28,3 @@ def test_rib(default_route: Route):
     assert not rib._rib_entry_in_next_hops(rib_route_entry)
     assert not rib._rib_entry_in_sources(rib_route_entry)
 
-
-
-    pass

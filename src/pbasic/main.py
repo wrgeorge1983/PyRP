@@ -21,12 +21,20 @@ import time
 from src.fp_interface import ForwardingPlane
 from src.system import RouteStatus, SourceCode, Route, RIBRouteEntry, RIB
 
+class PRoute(Route):
+    def __init__(self, prefix: str, next_hop: str, metric: int, threshold_ms: int):
+        super().__init__(prefix, next_hop)
+        self.source = SourceCode.BASIC
+        self.metric = metric
+        self.threshold_ms = threshold_ms
+
 
 class RoutingProtocolBasic:
 
     def __init__(self, fp: ForwardingPlane):
         self.fp = fp
         self.rib = RIB()
+        self.configured_routes: set[Route] = set()
 
     def configure_route(self, route: Route):
         """configure_route will add the given route to the RIB."""
@@ -41,9 +49,11 @@ class RoutingProtocolBasic:
             self.rib.add_route_entry(rib_route_entry)
 
     @property
-    def _localRoutes(self) -> set[Route]:
-        """_localRoutes will return all routes that are sourced from this protocol."""
-        return self.rib.routes_from_source(SourceCode.BASIC)
+    def _local_routes(self) -> set[RIBRouteEntry]:
+        """_localRoutes will return all RIBRouteEntries that are sourced from this protocol."""
+        return self.rib.rib_entries_from_search(source=SourceCode.BASIC)
+
+
 
     def evaluate_route(self, rib_route_entry: RIBRouteEntry):
         """evaluate_route will evaluate the given route in the RIB."""
@@ -53,7 +63,7 @@ class RoutingProtocolBasic:
                 rib_route_entry.status = RouteStatus.DOWN
                 rib_route_entry.last_updated = time.time()
             else:
-                rib_route_entry.metric = rtt
+                rib_route_entry.status = RouteStatus.UP
                 rib_route_entry.last_updated = time.time()
 
     def evaluate_routes(self):
