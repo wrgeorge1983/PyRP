@@ -32,6 +32,8 @@ class PBRoute(Route):
         self.source = SourceCode.BASIC
         self.metric = metric
         self.threshold_ms = threshold_ms
+        self.status = RouteStatus.UNKNOWN
+        self.last_updated = time.time()
         # self._value = self.prefix, self.next_hop, self.source, self.metric, self.threshold_ms
         self._value = self.prefix, self.next_hop  # including source, metric, and threshold don't seem to be a good idea
 
@@ -40,38 +42,51 @@ class PBRoute(Route):
 
 class RoutingProtocolBasic:
     source_code = SourceCode.BASIC
-    def __init__(self, fp: ForwardingPlane):
+    def __init__(self, fp: ForwardingPlane, measure_threshold_seconds: int = 60):
         self.fp = fp
-        self.configured_routes: set[PBRoute] = set()
+        self._configured_routes: set[PBRoute] = set()
+        self._measure_threshold_seconds = measure_threshold_seconds
+
+    @property
+    def configured_routes(self):
+        return self._configured_routes
+
+    @property
+    def up_routes(self):
+        return [route for route in self._configured_routes if route.status == RouteStatus.UP]
 
     def add_confiugred_route(self, route: Route, metric: int, threshold_ms: int):
         """configure_route will add the given route to the RIB."""
         pb_route = PBRoute(route.prefix, route.next_hop, metric, threshold_ms)
-        self.configured_routes.add(pb_route)
+        self._configured_routes.add(pb_route)
 
     def remove_configured_route(self, route: Route):
         """remove_configured_route will remove the given route from the RIB."""
         # this seems okay, but might be a problem later because of how hashing works
         pb_route = PBRoute(route.prefix, route.next_hop, 0, 0)
-        self.configured_routes.discard(pb_route)
+        self._configured_routes.discard(pb_route)
 
     def evaluate_route(self, pb_route: PBRoute):
         """evaluate_route will evaluate the given route in the RIB."""
         if (
             pb_route.status == RouteStatus.UP
-            or time.time() - pb_route.last_updated > 60
+            or time.time() - pb_route.last_updated > self._measure_threshold_seconds
         ):
-            rtt = self.fp.ping(pb_route.next_hop)
-            if rtt == -1:
+            rtt = self.fp.ping(pb_route.next_hop, timeout_seconds=int(pb_route.threshold_ms / 1000))
+            try:
+                if rtt <= pb_route.threshold_ms:
+                    pb_route.status = RouteStatus.UP
+                else:
+                    pb_route.status = RouteStatus.DOWN
+            except TimeoutError:
                 pb_route.status = RouteStatus.DOWN
-                pb_route.last_updated = time.time()
-            else:
-                pb_route.status = RouteStatus.UP
-                pb_route.last_updated = time.time()
+
+            pb_route.last_updated = time.time()
 
     def evaluate_routes(self):
         """evaluate_routes will evaluate all routes in the configured_routes."""
-        for rib_route_entry in self.configured_routes:
-            self.evaluate_route(rib_route_entry)
+        for pb_route in self._configured_routes:
+            self.evaluate_route(pb_route)
+
 
 
