@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "ac87b77345db7a31cfd6ea27360ce53681b7d24afe8db166ef93dcaaa474df5d"
+            "sha256": "f9c6098205fcb5c06166a92f068c2d01116229b682b7b7853a938773dbaa1329"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -23,6 +23,24 @@
             ],
             "index": "pypi",
             "version": "==1.9.8"
+        },
+        "munch": {
+            "hashes": [
+                "sha256:542cb151461263216a4e37c3fd9afc425feeaf38aaa3025cd2a981fadb422235",
+                "sha256:71033c45db9fb677a0b7eb517a4ce70ae09258490e419b0e7f00d1e386ecb1b4"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.6'",
+            "version": "==4.0.0"
+        },
+        "toml": {
+            "hashes": [
+                "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b",
+                "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '2.6' and python_version not in '3.0, 3.1, 3.2, 3.3'",
+            "version": "==0.10.2"
         }
     },
     "develop": {

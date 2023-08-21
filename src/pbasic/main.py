@@ -35,17 +35,27 @@ class PBRoute(Route):
         self.status = RouteStatus.UNKNOWN
         self.last_updated = time.time()
         # self._value = self.prefix, self.next_hop, self.source, self.metric, self.threshold_ms
-        self._value = self.prefix, self.next_hop  # including source, metric, and threshold don't seem to be a good idea
+        self._value = (
+            self.prefix,
+            self.next_hop,
+        )  # including source, metric, and threshold don't seem to be a good idea
 
     # __hash__ and __eq__ are defined in Route!
 
 
 class RoutingProtocolBasic:
     source_code = SourceCode.BASIC
-    def __init__(self, fp: ForwardingPlane, measure_threshold_seconds: int = 60):
+
+    def __init__(
+        self,
+        fp: ForwardingPlane,
+        threshold_measure_interval: int = 60,
+        admin_distance: int = 1,
+    ):
         self.fp = fp
         self._configured_routes: set[PBRoute] = set()
-        self._measure_threshold_seconds = measure_threshold_seconds
+        self._threshold_measure_interval = threshold_measure_interval
+        self.admin_distance = admin_distance
 
     @property
     def configured_routes(self):
@@ -53,7 +63,9 @@ class RoutingProtocolBasic:
 
     @property
     def up_routes(self):
-        return [route for route in self._configured_routes if route.status == RouteStatus.UP]
+        return [
+            route for route in self._configured_routes if route.status == RouteStatus.UP
+        ]
 
     def add_confiugred_route(self, route: Route, priority: int, threshold_ms: int):
         """configure_route will add the given route to the RIB."""
@@ -70,9 +82,11 @@ class RoutingProtocolBasic:
         """evaluate_route will evaluate the given route in the RIB."""
         if (
             pb_route.status == RouteStatus.UP
-            or time.time() - pb_route.last_updated > self._measure_threshold_seconds
+            or time.time() - pb_route.last_updated > self._threshold_measure_interval
         ):
-            rtt = self.fp.ping(pb_route.next_hop, timeout_seconds=int(pb_route.threshold_ms / 1000))
+            rtt = self.fp.ping(
+                pb_route.next_hop, timeout_seconds=int(pb_route.threshold_ms / 1000)
+            )
             try:
                 if rtt <= pb_route.threshold_ms:
                     pb_route.status = RouteStatus.UP
@@ -101,5 +115,3 @@ class RoutingProtocolBasic:
                     best_routes[route.prefix] = route
 
         return set(best_routes.values())
-
-

@@ -11,10 +11,12 @@ def mock_fp(mocker):
     mock_fp = mocker.Mock(name="fp")
     return mock_fp
 
+
 @pytest.fixture
 def mock_rpb(mock_fp):
     rpb = RoutingProtocolBasic(mock_fp, 0)
     return rpb
+
 
 def test_pbasic_evaluate(mock_rpb, mock_fp):
     prefix_a = ip_network("0.0.0.0/0")
@@ -31,6 +33,7 @@ def test_pbasic_evaluate(mock_rpb, mock_fp):
     assert len(configured_routes) == 2
     assert len(mock_rpb.up_routes) == 1
     assert mock_rpb.up_routes[0].next_hop == next_hop_a
+
 
 def test_pbasic_export(mock_rpb, mock_fp):
     prefix_a = ip_network("0.0.0.0/0")
@@ -64,6 +67,3 @@ def test_pbasic_export(mock_rpb, mock_fp):
     assert exported_routes == {route_a, route_d}
     # this works even though the objects are of different types because of the hashing and equality functions
     # it might not be good to rely on this, but it works for now
-
-
-

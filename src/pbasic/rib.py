@@ -3,7 +3,6 @@ import time
 from system import IPNetwork, IPAddress, SourceCode, RouteStatus
 
 
-
 class RIBRouteEntry:
     def __init__(
         self,
@@ -21,7 +20,10 @@ class RIBRouteEntry:
         self.status = status
         self.threshold_ms = threshold_ms
         self.last_updated = time.time()
-        self._value = self.prefix, self.next_hop  # including source, metric, and threshold don't seem to be a good idea
+        self._value = (
+            self.prefix,
+            self.next_hop,
+        )  # including source, metric, and threshold don't seem to be a good idea
 
     def __hash__(self):
         return hash(self._value)
@@ -55,7 +57,6 @@ class RIB:
         if rib_route_entry.next_hop not in self.next_hops:
             self.next_hops[rib_route_entry.next_hop] = set()
         self.next_hops[rib_route_entry.next_hop].add(rib_route_entry)
-
 
     def remove_route_entry(self, rib_route_entry: RIBRouteEntry):
         self._route_entries.discard(rib_route_entry)
