@@ -7,7 +7,7 @@ import socket
 
 
 class ForwardingPlane:
-    def __init__(self, sock=socket.socket):
+    def __init__(self, *, sock=socket.socket):
         self._sock = sock
 
     def _send_ping(self, dest_ip: str, timeout_seconds: int) -> float:

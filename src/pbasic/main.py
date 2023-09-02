@@ -21,10 +21,9 @@ since this protocol does not have redistribution, it will only have configured r
 
 import time
 
-from config import Config
-from .rib import RIBRouteEntry
+from src.config import Config
 from src.fp_interface import ForwardingPlane
-from system import SourceCode, RouteStatus, Route, IPNetwork
+from src.system import SourceCode, RouteStatus, Route, IPNetwork
 
 
 class PBRoute(Route):
@@ -41,6 +40,17 @@ class PBRoute(Route):
             self.next_hop,
         )  # including source, metric, and threshold don't seem to be a good idea
 
+    @property
+    def as_json(self):
+        return {
+            "prefix": str(self.prefix),
+            "next_hop": str(self.next_hop),
+            "source": self.source.value,
+            "priority": self.priority,
+            "threshold_ms": self.threshold_ms,
+            "status": self.status.value,
+            "last_updated": self.last_updated,
+        }
     # __hash__ and __eq__ are defined in Route!
 
 
@@ -60,12 +70,26 @@ class RoutingProtocolBasic:
 
     @classmethod
     def from_config(cls, config: Config, fp: ForwardingPlane):
-        return cls(
+        rslt = cls(
             fp,
             config.pbasic.get("threshold_measure_interval", 60),
-            config.pbasic.get("admin_distance", 1)
+            config.pbasic.get("admin_distance", 1),
         )
+        for route in config.pbasic.get("routes", []):
+            rslt.add_configured_route(
+                Route(route["prefix"], route["next_hop"]),
+                route["priority"],
+                route["threshold_ms"],
+            )
+        return rslt
 
+    @property
+    def as_json(self) -> dict[str, str | int | list[dict[str, str | int]]]:
+        return {
+            "admin_distance": self.admin_distance,
+            "threshold_measure_interval": self._threshold_measure_interval,
+            "configured_routes": [route.as_json for route in self._configured_routes],
+        }
 
     @property
     def configured_routes(self):
@@ -77,7 +101,7 @@ class RoutingProtocolBasic:
             route for route in self._configured_routes if route.status == RouteStatus.UP
         ]
 
-    def add_confiugred_route(self, route: Route, priority: int, threshold_ms: int):
+    def add_configured_route(self, route: Route, priority: int, threshold_ms: int):
         """configure_route will add the given route to the RIB."""
         pb_route = PBRoute(route.prefix, route.next_hop, priority, threshold_ms)
         self._configured_routes.add(pb_route)
@@ -91,13 +115,13 @@ class RoutingProtocolBasic:
     def evaluate_route(self, pb_route: PBRoute):
         """evaluate_route will evaluate the given route in the RIB."""
         if (
-            pb_route.status == RouteStatus.UP
-            or time.time() - pb_route.last_updated > self._threshold_measure_interval
+            pb_route.status == RouteStatus.UNKNOWN
+            or (time.time() - pb_route.last_updated) > self._threshold_measure_interval
         ):
-            rtt = self.fp.ping(
-                pb_route.next_hop, timeout_seconds=int(pb_route.threshold_ms / 1000)
-            )
             try:
+                rtt = self.fp.ping(
+                    pb_route.next_hop, timeout_seconds=int(pb_route.threshold_ms / 1000)
+                )
                 if rtt <= pb_route.threshold_ms:
                     pb_route.status = RouteStatus.UP
                 else:

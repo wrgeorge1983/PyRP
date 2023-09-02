@@ -25,8 +25,8 @@ def test_pbasic_evaluate(mock_rpb, mock_fp):
     prefix_b = ip_network("0.0.0.0/0")
     next_hop_b = ip_address("1.1.1.2")
     route_b = Route(prefix_b, next_hop_b)
-    mock_rpb.add_confiugred_route(route_a, 1, 100)
-    mock_rpb.add_confiugred_route(route_b, 2, 50)
+    mock_rpb.add_configured_route(route_a, 1, 100)
+    mock_rpb.add_configured_route(route_b, 2, 50)
     mock_fp.ping.return_value = 75
     mock_rpb.evaluate_routes()
     configured_routes = mock_rpb.configured_routes
@@ -52,11 +52,11 @@ def test_pbasic_export(mock_rpb, mock_fp):
     next_hop_d = ip_address("1.1.1.2")
     route_d = Route(prefix_d, next_hop_d)
 
-    mock_rpb.add_confiugred_route(route_a, 1, 100)
-    mock_rpb.add_confiugred_route(route_b, 2, 50)
+    mock_rpb.add_configured_route(route_a, 1, 100)
+    mock_rpb.add_configured_route(route_b, 2, 50)
 
-    mock_rpb.add_confiugred_route(route_c, 1, 100)
-    mock_rpb.add_confiugred_route(route_d, 2, 100)
+    mock_rpb.add_configured_route(route_c, 1, 100)
+    mock_rpb.add_configured_route(route_d, 2, 100)
     mock_fp.ping.return_value = 75
     mock_rpb.evaluate_routes()
     assert len(mock_rpb.configured_routes) == 4

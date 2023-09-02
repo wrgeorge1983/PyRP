@@ -1,5 +1,7 @@
 import ipaddress
+import string
 from enum import Enum
+import random
 
 
 class RouteStatus(Enum):
@@ -33,7 +35,12 @@ class Route:
         return hash(self._value)
 
     def __eq__(self, other):
-        if not isinstance(other, Route):
-            return NotImplemented
+        try:
+            return hash(self) == hash(other)
+        except TypeError:
+            return False
 
-        return self._value == other._value
+
+def generate_id(length: int = 8) -> str:
+    valid_characters = string.ascii_letters + string.digits
+    return "".join(random.choice(valid_characters) for _ in range(length))

@@ -12,7 +12,7 @@ def mock_socket(mocker):
 @pytest.fixture
 def fp(mocker, mock_socket):
     mock_socket_lib = mocker.Mock(name="socketLib", return_value=mock_socket)
-    fp = ForwardingPlane(mock_socket_lib)
+    fp = ForwardingPlane(sock=mock_socket_lib)
     return fp
 
 
