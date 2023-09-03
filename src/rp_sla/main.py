@@ -52,6 +52,7 @@ class SLA_Route(Route):
             "status": self.status.value,
             "last_updated": self.last_updated,
         }
+
     # __hash__ and __eq__ are defined in Route!
 
 
@@ -104,38 +105,39 @@ class RP_SLA:
 
     def add_configured_route(self, route: Route, priority: int, threshold_ms: int):
         """configure_route will add the given route to the RIB."""
-        pb_route = SLA_Route(route.prefix, route.next_hop, priority, threshold_ms)
-        self._configured_routes.add(pb_route)
+        sla_route = SLA_Route(route.prefix, route.next_hop, priority, threshold_ms)
+        self._configured_routes.add(sla_route)
 
     def remove_configured_route(self, route: Route):
         """remove_configured_route will remove the given route from the RIB."""
         # this seems okay, but might be a problem later because of how hashing works
-        pb_route = SLA_Route(route.prefix, route.next_hop, 0, 0)
-        self._configured_routes.discard(pb_route)
+        sla_route = SLA_Route(route.prefix, route.next_hop, 0, 0)
+        self._configured_routes.discard(sla_route)
 
-    def evaluate_route(self, pb_route: SLA_Route):
+    def evaluate_route(self, sla_route: SLA_Route):
         """evaluate_route will evaluate the given route in the RIB."""
         if (
-            pb_route.status == RouteStatus.UNKNOWN
-            or (time.time() - pb_route.last_updated) > self._threshold_measure_interval
+            sla_route.status == RouteStatus.UNKNOWN
+            or (time.time() - sla_route.last_updated) > self._threshold_measure_interval
         ):
             try:
                 rtt = self.fp.ping(
-                    pb_route.next_hop, timeout_seconds=int(pb_route.threshold_ms / 1000)
+                    sla_route.next_hop,
+                    timeout_seconds=int(sla_route.threshold_ms / 1000),
                 )
-                if rtt <= pb_route.threshold_ms:
-                    pb_route.status = RouteStatus.UP
+                if rtt <= sla_route.threshold_ms:
+                    sla_route.status = RouteStatus.UP
                 else:
-                    pb_route.status = RouteStatus.DOWN
+                    sla_route.status = RouteStatus.DOWN
             except TimeoutError:
-                pb_route.status = RouteStatus.DOWN
+                sla_route.status = RouteStatus.DOWN
 
-            pb_route.last_updated = time.time()
+            sla_route.last_updated = time.time()
 
     def evaluate_routes(self):
         """evaluate_routes will evaluate all routes in the configured_routes."""
-        for pb_route in self._configured_routes:
-            self.evaluate_route(pb_route)
+        for sla_route in self._configured_routes:
+            self.evaluate_route(sla_route)
 
     def export_routes(self) -> set[SLA_Route]:
         """export_routes will return a set of only best routes (up, highest priority)."""
