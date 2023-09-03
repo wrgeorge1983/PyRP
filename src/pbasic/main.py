@@ -23,7 +23,8 @@ import time
 
 from src.config import Config
 from src.fp_interface import ForwardingPlane
-from src.system import SourceCode, RouteStatus, Route, IPNetwork
+from src.system import SourceCode, RouteStatus, IPNetwork
+from src.generic.rib import Route
 
 
 class PBRoute(Route):

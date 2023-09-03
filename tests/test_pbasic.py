@@ -3,7 +3,7 @@ from ipaddress import ip_network, ip_address
 import pytest
 
 from src.pbasic import RoutingProtocolBasic
-from system import Route
+from generic.rib import Route
 
 
 @pytest.fixture

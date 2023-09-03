@@ -34,7 +34,7 @@ app = FastAPI()
 
 @app.get("/")
 def read_root():
-    return {"Service": "PBasic"}
+    return {"Service": "ControlPlane"}
 
 
 @app.get("/instances")
@@ -59,18 +59,18 @@ def create_instance(admin_distance: int = 1, threshold_measure_interval: int = 6
     )
     return {"instance_id": instance_id}
 
-@app.post("/instances/new_from_config")
-def create_instance_from_config(filename: str):
-    config = Config()
-    try:
-        config.load(filename)
-    except FileNotFoundError:
-        return JSONResponse(status_code=404, content={"error": "config file not found"})
-
-    instance_id = generate_id()
-    fp = ForwardingPlane()
-    protocol_instances[instance_id] = RoutingProtocolBasic.from_config(config, fp)
-    return {"instance_id": instance_id}
+# @app.post("/instances/new_from_config")
+# def create_instance_from_config(filename: str):
+#     config = Config()
+#     try:
+#         config.load(filename)
+#     except FileNotFoundError:
+#         return JSONResponse(status_code=404, content={"error": "config file not found"})
+#
+#     instance_id = generate_id()
+#     fp = ForwardingPlane()
+#     protocol_instances[instance_id] = RoutingProtocolBasic.from_config(config, fp)
+#     return {"instance_id": instance_id}
 
 
 @app.delete("/instances/{instance_id}")

@@ -1,6 +1,6 @@
 import time
 
-from system import IPNetwork, IPAddress, SourceCode, RouteStatus
+from src.system import IPNetwork, IPAddress, SourceCode, RouteStatus
 
 
 class RIBRouteEntry:
@@ -148,4 +148,20 @@ class RIB:
         try:
             return rib_route_entry in self.sources[rib_route_entry.source]
         except KeyError:
+            return False
+
+
+class Route:
+    def __init__(self, prefix: IPNetwork, next_hop: IPAddress):
+        self.prefix = prefix
+        self.next_hop = next_hop
+        self._value = self.prefix, self.next_hop
+
+    def __hash__(self):
+        return hash(self._value)
+
+    def __eq__(self, other):
+        try:
+            return hash(self) == hash(other)
+        except TypeError:
             return False

@@ -25,22 +25,6 @@ IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
 IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
 
-class Route:
-    def __init__(self, prefix: IPNetwork, next_hop: IPAddress):
-        self.prefix = prefix
-        self.next_hop = next_hop
-        self._value = self.prefix, self.next_hop
-
-    def __hash__(self):
-        return hash(self._value)
-
-    def __eq__(self, other):
-        try:
-            return hash(self) == hash(other)
-        except TypeError:
-            return False
-
-
 def generate_id(length: int = 8) -> str:
     valid_characters = string.ascii_letters + string.digits
     return "".join(random.choice(valid_characters) for _ in range(length))

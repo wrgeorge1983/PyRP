@@ -1,0 +1,9 @@
+listen_address = "localhost"
+
+[service_ports]
+control_plane = 5010
+rip = 5020
+ospf = 5021
+bgp = 5022
+basic = 5023
+
