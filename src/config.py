@@ -9,7 +9,7 @@ class ServicePorts(Enum):
     RIP = 5020
     OSPF = 5021
     BGP = 5022
-    BASIC = 5023
+    SLA = 5023
 
 def control_plane_defaults() -> dict[str, int | list | str]:
     control_plane_config = {
@@ -17,21 +17,21 @@ def control_plane_defaults() -> dict[str, int | list | str]:
 
     return control_plane_config
 
-def pbasic_defaults() -> dict[str, int | list | str]:
-    pbasic_config = {
+def rp_sla_defaults() -> dict[str, int | list | str]:
+    rp_sla_config = {
         "admin_distance": 1,
         "threshold_measure_interval": 60,
         "routes": [],
     }
 
-    return pbasic_config
+    return rp_sla_config
 
 
 class Config:
     def __init__(self):
         self._data = {}
         self.control_plane = control_plane_defaults()
-        self.pbasic = pbasic_defaults()
+        self.rp_sla = rp_sla_defaults()
 
     def load(self, path: Path | str):
         if not isinstance(path, Path):
@@ -42,5 +42,5 @@ class Config:
 
         data = toml.load(path)
         self._data = data
-        self.pbasic.update(data.get("pbasic", {}))
+        self.rp_sla.update(data.get("rp_sla", {}))
         self.control_plane.update(data.get("control_plane", {}))

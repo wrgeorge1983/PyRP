@@ -8,13 +8,14 @@ from starlette.responses import JSONResponse
 
 from src.config import Config
 from src.fp_interface import ForwardingPlane
-from src.pbasic import RoutingProtocolBasic
+from src.rp_sla import RP_SLA
 from src.system import generate_id
 from src.generic.rib import Route
 
-base_config = toml.load("config.toml")
+BASE_CONFIG = toml.load("config.toml")
+RP_SLA_CONFIG = BASE_CONFIG["api_rp_sla"]
 
-protocol_instances: dict[str, RoutingProtocolBasic] = dict()
+protocol_instances: dict[str, RP_SLA] = dict()
 
 
 def _render_output(output: object):
@@ -34,7 +35,7 @@ app = FastAPI()
 
 @app.get("/")
 def read_root():
-    return {"Service": "PBasic"}
+    return {"Service": "RP_SLA"}
 
 
 @app.get("/instances")
@@ -54,10 +55,11 @@ def get_instance(instance_id: str):
 def create_instance(admin_distance: int = 1, threshold_measure_interval: int = 60):
     instance_id = generate_id()
     fp = ForwardingPlane()
-    protocol_instances[instance_id] = RoutingProtocolBasic(
+    protocol_instances[instance_id] = RP_SLA(
         fp, admin_distance, threshold_measure_interval
     )
     return {"instance_id": instance_id}
+
 
 @app.post("/instances/new_from_config")
 def create_instance_from_config(filename: str):
@@ -69,7 +71,7 @@ def create_instance_from_config(filename: str):
 
     instance_id = generate_id()
     fp = ForwardingPlane()
-    protocol_instances[instance_id] = RoutingProtocolBasic.from_config(config, fp)
+    protocol_instances[instance_id] = RP_SLA.from_config(config, fp)
     return {"instance_id": instance_id}
 
 
@@ -96,7 +98,7 @@ def create_route(
     priority: int,
     threshold_ms: int,
 ):
-    instance: RoutingProtocolBasic = protocol_instances.get(instance_id, None)
+    instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:
         return JSONResponse(status_code=404, content={"error": "instance not found"})
     basic_route = Route(prefix, next_hop)
@@ -110,7 +112,7 @@ def delete_route(
     prefix: str,
     next_hop: str,
 ):
-    instance: RoutingProtocolBasic = protocol_instances.get(instance_id, None)
+    instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:
         return JSONResponse(status_code=404, content={"error": "instance not found"})
     basic_route = Route(prefix, next_hop)
@@ -121,15 +123,16 @@ def delete_route(
 
 @app.post("/instance/{instance_id}/evaluate_routes")
 def evaluate_routes(instance_id: str):
-    instance: RoutingProtocolBasic = protocol_instances.get(instance_id, None)
+    instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:
         return JSONResponse(status_code=404, content={"error": "instance not found"})
     instance.evaluate_routes()
     return instance.as_json
 
+
 @app.get("/instance/{instance_id}/best_routes")
 def get_best_routes(instance_id: str):
-    instance: RoutingProtocolBasic = protocol_instances.get(instance_id, None)
+    instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:
         return JSONResponse(status_code=404, content={"error": "instance not found"})
     rslt = instance.export_routes()
@@ -137,4 +140,6 @@ def get_best_routes(instance_id: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host=base_config["listen_address"], port=base_config["service_ports"]["basic"])
+    uvicorn.run(
+        app, host=RP_SLA_CONFIG["listen_address"], port=RP_SLA_CONFIG["listen_port"]
+    )

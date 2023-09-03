@@ -1,9 +1,8 @@
+[control_plane]
 listen_address = "localhost"
+listen_port = 5010  # expected defautl is 5010
 
-[service_ports]
-control_plane = 5010
-rip = 5020
-ospf = 5021
-bgp = 5022
-basic = 5023
+[api_rp_sla]
+listen_address = "localhost"
+listen_port = 5023  # expected default is 5023
 

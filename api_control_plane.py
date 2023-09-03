@@ -8,13 +8,13 @@ from starlette.responses import JSONResponse
 
 from src.config import Config
 from src.fp_interface import ForwardingPlane
-from src.pbasic import RoutingProtocolBasic
+from src.rp_sla import RP_SLA
 from src.system import generate_id
 from src.generic.rib import Route
 
 base_config = toml.load("config.toml")
 
-protocol_instances: dict[str, RoutingProtocolBasic] = dict()
+protocol_instances: dict[str, RP_SLA] = dict()
 
 
 def _render_output(output: object):
@@ -54,7 +54,7 @@ def get_instance(instance_id: str):
 def create_instance(admin_distance: int = 1, threshold_measure_interval: int = 60):
     instance_id = generate_id()
     fp = ForwardingPlane()
-    protocol_instances[instance_id] = RoutingProtocolBasic(
+    protocol_instances[instance_id] = RP_SLA(
         fp, admin_distance, threshold_measure_interval
     )
     return {"instance_id": instance_id}
@@ -96,7 +96,7 @@ def create_route(
     priority: int,
     threshold_ms: int,
 ):
-    instance: RoutingProtocolBasic = protocol_instances.get(instance_id, None)
+    instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:
         return JSONResponse(status_code=404, content={"error": "instance not found"})
     basic_route = Route(prefix, next_hop)
@@ -110,7 +110,7 @@ def delete_route(
     prefix: str,
     next_hop: str,
 ):
-    instance: RoutingProtocolBasic = protocol_instances.get(instance_id, None)
+    instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:
         return JSONResponse(status_code=404, content={"error": "instance not found"})
     basic_route = Route(prefix, next_hop)
@@ -121,7 +121,7 @@ def delete_route(
 
 @app.post("/instance/{instance_id}/evaluate_routes")
 def evaluate_routes(instance_id: str):
-    instance: RoutingProtocolBasic = protocol_instances.get(instance_id, None)
+    instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:
         return JSONResponse(status_code=404, content={"error": "instance not found"})
     instance.evaluate_routes()
@@ -129,7 +129,7 @@ def evaluate_routes(instance_id: str):
 
 @app.get("/instance/{instance_id}/best_routes")
 def get_best_routes(instance_id: str):
-    instance: RoutingProtocolBasic = protocol_instances.get(instance_id, None)
+    instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:
         return JSONResponse(status_code=404, content={"error": "instance not found"})
     rslt = instance.export_routes()

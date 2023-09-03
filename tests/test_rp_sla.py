@@ -2,7 +2,7 @@ from ipaddress import ip_network, ip_address
 
 import pytest
 
-from src.pbasic import RoutingProtocolBasic
+from src.rp_sla import RP_SLA
 from generic.rib import Route
 
 
@@ -14,11 +14,11 @@ def mock_fp(mocker):
 
 @pytest.fixture
 def mock_rpb(mock_fp):
-    rpb = RoutingProtocolBasic(mock_fp, 0)
+    rpb = RP_SLA(mock_fp, 0)
     return rpb
 
 
-def test_pbasic_evaluate(mock_rpb, mock_fp):
+def test_rp_sla_evaluate(mock_rpb, mock_fp):
     prefix_a = ip_network("0.0.0.0/0")
     next_hop_a = ip_address("1.1.1.1")
     route_a = Route(prefix_a, next_hop_a)
@@ -35,7 +35,7 @@ def test_pbasic_evaluate(mock_rpb, mock_fp):
     assert mock_rpb.up_routes[0].next_hop == next_hop_a
 
 
-def test_pbasic_export(mock_rpb, mock_fp):
+def test_rp_sla_export(mock_rpb, mock_fp):
     prefix_a = ip_network("0.0.0.0/0")
     next_hop_a = ip_address("1.1.1.1")
     route_a = Route(prefix_a, next_hop_a)

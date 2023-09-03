@@ -18,7 +18,7 @@ class SourceCode(Enum):
     RIP = 1
     OSPF = 2
     BGP = 3
-    BASIC = 4
+    SLA = 4
 
 
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network

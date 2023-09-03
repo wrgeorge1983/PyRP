@@ -27,10 +27,10 @@ from src.system import SourceCode, RouteStatus, IPNetwork
 from src.generic.rib import Route
 
 
-class PBRoute(Route):
+class SLA_Route(Route):
     def __init__(self, prefix: str, next_hop: str, priority: int, threshold_ms: int):
         super().__init__(prefix, next_hop)
-        self.source = SourceCode.BASIC
+        self.source = SourceCode.SLA
         self.priority = priority
         self.threshold_ms = threshold_ms
         self.status = RouteStatus.UNKNOWN
@@ -55,8 +55,8 @@ class PBRoute(Route):
     # __hash__ and __eq__ are defined in Route!
 
 
-class RoutingProtocolBasic:
-    source_code = SourceCode.BASIC
+class RP_SLA:
+    source_code = SourceCode.SLA
 
     def __init__(
         self,
@@ -65,7 +65,7 @@ class RoutingProtocolBasic:
         admin_distance: int = 1,
     ):
         self.fp = fp
-        self._configured_routes: set[PBRoute] = set()
+        self._configured_routes: set[SLA_Route] = set()
         self._threshold_measure_interval = threshold_measure_interval
         self.admin_distance = admin_distance
 
@@ -73,10 +73,10 @@ class RoutingProtocolBasic:
     def from_config(cls, config: Config, fp: ForwardingPlane):
         rslt = cls(
             fp,
-            config.pbasic.get("threshold_measure_interval", 60),
-            config.pbasic.get("admin_distance", 1),
+            config.rp_sla.get("threshold_measure_interval", 60),
+            config.rp_sla.get("admin_distance", 1),
         )
-        for route in config.pbasic.get("routes", []):
+        for route in config.rp_sla.get("routes", []):
             rslt.add_configured_route(
                 Route(route["prefix"], route["next_hop"]),
                 route["priority"],
@@ -104,16 +104,16 @@ class RoutingProtocolBasic:
 
     def add_configured_route(self, route: Route, priority: int, threshold_ms: int):
         """configure_route will add the given route to the RIB."""
-        pb_route = PBRoute(route.prefix, route.next_hop, priority, threshold_ms)
+        pb_route = SLA_Route(route.prefix, route.next_hop, priority, threshold_ms)
         self._configured_routes.add(pb_route)
 
     def remove_configured_route(self, route: Route):
         """remove_configured_route will remove the given route from the RIB."""
         # this seems okay, but might be a problem later because of how hashing works
-        pb_route = PBRoute(route.prefix, route.next_hop, 0, 0)
+        pb_route = SLA_Route(route.prefix, route.next_hop, 0, 0)
         self._configured_routes.discard(pb_route)
 
-    def evaluate_route(self, pb_route: PBRoute):
+    def evaluate_route(self, pb_route: SLA_Route):
         """evaluate_route will evaluate the given route in the RIB."""
         if (
             pb_route.status == RouteStatus.UNKNOWN
@@ -137,11 +137,11 @@ class RoutingProtocolBasic:
         for pb_route in self._configured_routes:
             self.evaluate_route(pb_route)
 
-    def export_routes(self) -> set[PBRoute]:
+    def export_routes(self) -> set[SLA_Route]:
         """export_routes will return a set of only best routes (up, highest priority)."""
         up_routes = self.up_routes
 
-        best_routes: dict[IPNetwork, PBRoute] = dict()
+        best_routes: dict[IPNetwork, SLA_Route] = dict()
         for route in up_routes:
             if route.prefix not in best_routes:
                 best_routes[route.prefix] = route
