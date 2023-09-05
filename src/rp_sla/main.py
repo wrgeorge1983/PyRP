@@ -18,24 +18,44 @@ routes will be handled as prefixes using the built-in ipaddress module.
 
 since this protocol does not have redistribution, it will only have configured routes.  Configured routes are the only routes that will be in the RIB.
 """
-
+import abc
 import time
+from typing import Type, Optional
 
 from src.config import Config
 from src.fp_interface import ForwardingPlane
-from src.system import SourceCode, RouteStatus, IPNetwork
-from src.generic.rib import Route
+from src.system import RouteStatus, IPNetwork, IPAddress
+from src.generic.rib import Route, RouteSpec
+
+
+class SLA_RouteSpec(RouteSpec):
+    priority: int
+    threshold_ms: int
+    last_updated: Optional[str]
+    status: Optional[RouteStatus]
 
 
 class SLA_Route(Route):
-    def __init__(self, prefix: str, next_hop: str, priority: int, threshold_ms: int):
+    intrinsic_fields = [
+        "prefix",
+        "next_hop",
+    ]
+
+    supplemental_fields = [
+        "priority",
+        "threshold_ms",
+    ]
+
+    optional_fields = ["last_updated", "status"]
+
+    def __init__(
+        self, prefix: IPNetwork, next_hop: IPAddress, priority: int, threshold_ms: int
+    ):
         super().__init__(prefix, next_hop)
-        self.source = SourceCode.SLA
         self.priority = priority
         self.threshold_ms = threshold_ms
         self.status = RouteStatus.UNKNOWN
         self.last_updated = time.time()
-        # self._value = self.prefix, self.next_hop, self.source, self.metric, self.threshold_ms
         self._value = (
             self.prefix,
             self.next_hop,
@@ -46,7 +66,6 @@ class SLA_Route(Route):
         return {
             "prefix": str(self.prefix),
             "next_hop": str(self.next_hop),
-            "source": self.source.value,
             "priority": self.priority,
             "threshold_ms": self.threshold_ms,
             "status": self.status.value,
@@ -56,8 +75,100 @@ class SLA_Route(Route):
     # __hash__ and __eq__ are defined in Route!
 
 
+class RIB_Base(metaclass=abc.ABCMeta):
+
+    def __init__(self):
+        self._table = set()
+
+    @property
+    @abc.abstractmethod
+    def route_type(self) -> Type[Route]:
+        pass
+
+    @abc.abstractmethod
+    def add(self, route: RouteSpec | Type[Route]):
+        pass
+
+    @abc.abstractmethod
+    def remove(self, route: RouteSpec | Type[Route]):
+        pass
+
+    @abc.abstractmethod
+    def discard(self, route: RouteSpec | Type[Route]):
+        pass
+
+
+    def _check_for_intrinsic_values(self, **kwargs) -> None:
+        missing_fields = []
+        for key in self.route_type.intrinsic_fields:
+            if key not in kwargs:
+                missing_fields.append(key)
+
+        if missing_fields:
+            raise ValueError(f"Missing Fields: {missing_fields}")
+
+    def _check_for_invalid_fields(self, **kwargs) -> None:
+        """Raises ValueError with any invalid fields that are found"""
+        valid_fields = (
+            self.route_type.intrinsic_fields
+            + self.route_type.supplemental_fields
+            + self.route_type.optional_fields
+        )
+        invalid_fields = []
+        for key in kwargs:
+            if key not in valid_fields:
+                invalid_fields.append(key)
+
+        if invalid_fields:
+            raise ValueError(f"Invalid fields: {invalid_fields}")
+
+    def _validate_fields(self, **kwargs):
+        self._check_for_intrinsic_values(**kwargs)
+        self._check_for_invalid_fields(**kwargs)
+
+    def export_routes(self) -> list[RouteSpec]:
+        result = [
+            route.as_json
+            for route in self._table
+        ]
+        return result
+
+    def import_routes(self, routes: list[RouteSpec]):
+        self._table = {
+            self.route_type(**route)
+            for route in routes
+        }
+
+
+class SLA_RIB(RIB_Base):
+    route_type: Type[Route] = SLA_Route
+
+    def __init__(self):
+        self._table: set[SLA_Route] = set()
+
+    @property
+    def items(self):
+        return set(x for x in self._table)
+
+    def add(self, route: SLA_RouteSpec | route_type):
+        if isinstance(route, dict):
+            self._validate_fields(**route)
+            route = self.route_type(**route)
+
+        self._table.add(route)
+
+    def remove(self, route: SLA_RouteSpec | route_type):
+        if isinstance(route, dict):
+            self._validate_fields(**route)
+            route = self.route_type(**route)
+
+        self._table.discard(route)
+
+    discard = remove
+
+
 class RP_SLA:
-    source_code = SourceCode.SLA
+    route_type: Type[Route] = SLA_Route
 
     def __init__(
         self,
@@ -66,7 +177,8 @@ class RP_SLA:
         admin_distance: int = 1,
     ):
         self.fp = fp
-        self._configured_routes: set[SLA_Route] = set()
+        self._configured_routes = SLA_RIB()
+        self._rib = SLA_RIB()
         self._threshold_measure_interval = threshold_measure_interval
         self.admin_distance = admin_distance
 
@@ -78,11 +190,8 @@ class RP_SLA:
             config.rp_sla.get("admin_distance", 1),
         )
         for route in config.rp_sla.get("routes", []):
-            rslt.add_configured_route(
-                Route(route["prefix"], route["next_hop"]),
-                route["priority"],
-                route["threshold_ms"],
-            )
+            route: SLA_RouteSpec
+            rslt.add_configured_route(route)
         return rslt
 
     @property
@@ -90,29 +199,37 @@ class RP_SLA:
         return {
             "admin_distance": self.admin_distance,
             "threshold_measure_interval": self._threshold_measure_interval,
-            "configured_routes": [route.as_json for route in self._configured_routes],
+            "configured_routes": [
+                route.as_json for route in self._configured_routes.items
+            ],
         }
 
     @property
     def configured_routes(self):
-        return self._configured_routes
+        return self._configured_routes.items
+
+    @property
+    def rib_routes(self):
+        return self._rib.items
 
     @property
     def up_routes(self):
         return [
-            route for route in self._configured_routes if route.status == RouteStatus.UP
+            route for route in self.rib_routes if route.status == RouteStatus.UP
         ]
 
-    def add_configured_route(self, route: Route, priority: int, threshold_ms: int):
-        """configure_route will add the given route to the RIB."""
-        sla_route = SLA_Route(route.prefix, route.next_hop, priority, threshold_ms)
-        self._configured_routes.add(sla_route)
+    def add_configured_route(self, route: SLA_RouteSpec | route_type):
+        self._configured_routes.add(route)
+        self._rib.add(route)
 
-    def remove_configured_route(self, route: Route):
-        """remove_configured_route will remove the given route from the RIB."""
-        # this seems okay, but might be a problem later because of how hashing works
-        sla_route = SLA_Route(route.prefix, route.next_hop, 0, 0)
-        self._configured_routes.discard(sla_route)
+    def remove_configured_route(self, route: SLA_RouteSpec | route_type):
+        self._configured_routes.discard(route)
+        self._rib.discard(route)
+
+    def reset_rib(self):
+        configured_routes = self._configured_routes.export_routes()
+        self._rib = SLA_RIB()
+        self._rib.import_routes(configured_routes)
 
     def evaluate_route(self, sla_route: SLA_Route):
         """evaluate_route will evaluate the given route in the RIB."""
@@ -136,7 +253,7 @@ class RP_SLA:
 
     def evaluate_routes(self):
         """evaluate_routes will evaluate all routes in the configured_routes."""
-        for sla_route in self._configured_routes:
+        for sla_route in self._rib.items:
             self.evaluate_route(sla_route)
 
     def export_routes(self) -> set[SLA_Route]:

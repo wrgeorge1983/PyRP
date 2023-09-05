@@ -1,7 +1,14 @@
+import abc
 import time
+from typing import TypedDict
 
 from src.system import IPNetwork, IPAddress, SourceCode, RouteStatus
+from src.system import IPNetwork, IPAddress
 
+
+class RouteSpec(TypedDict):
+    prefix: IPNetwork
+    next_hop: IPAddress
 
 class RIBRouteEntry:
     def __init__(
@@ -20,7 +27,13 @@ class RIBRouteEntry:
         self.admin_distance = admin_distance
         self.status = status
         self.last_updated = time.time()
-        self._value = self.prefix, self.next_hop, self.source, self.metric, self.admin_distance
+        self._value = (
+            self.prefix,
+            self.next_hop,
+            self.source,
+            self.metric,
+            self.admin_distance,
+        )
 
     def __hash__(self):
         return hash(self._value)
@@ -30,6 +43,7 @@ class RIBRouteEntry:
             return NotImplemented
 
         return self._value == other._value
+
 
 class RIB:
     """RIB is a Routing Information Base.  It is a database of routes.
@@ -152,10 +166,41 @@ class RIB:
 
 
 class Route:
+
+    intrinsic_fields = [
+        "prefix",
+        "next_hop",
+    ]
+
+    supplemental_fields = []
+
+    optional_fields = []
+
     def __init__(self, prefix: IPNetwork, next_hop: IPAddress):
         self.prefix = prefix
         self.next_hop = next_hop
         self._value = self.prefix, self.next_hop
+
+    @property
+    def intrinsic_values(self) -> tuple:
+        results = (
+            getattr(self, field) for field in self.intrinsic_fields
+        )
+        return tuple(results)
+
+    @property
+    def supplimental_values(self) -> tuple:
+        results = (
+            getattr(self, field) for field in self.supplemental_fields
+        )
+        return tuple(results)
+
+    @property
+    def as_json(self) -> RouteSpec:
+        return {
+            "prefix": str(self.prefix),
+            "next_hop": str(self.next_hop),
+        }
 
     def __hash__(self):
         return hash(self._value)
@@ -165,3 +210,5 @@ class Route:
             return hash(self) == hash(other)
         except TypeError:
             return False
+
+

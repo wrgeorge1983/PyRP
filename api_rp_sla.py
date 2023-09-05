@@ -71,7 +71,7 @@ def create_instance_from_config(filename: str):
 
     instance_id = generate_id()
     fp = ForwardingPlane()
-    protocol_instances[instance_id] = RP_SLA.from_config(config, fp)
+    protocol_instances[instance_id] = RP_SLA.from_config_file(config, fp)
     return {"instance_id": instance_id}
 
 
@@ -81,7 +81,16 @@ def delete_instance(instance_id: str):
     return {"instance_id": instance_id}
 
 
-@app.get("/instances/{instance_id}/routes")
+@app.get("/instances/{instance_id}/routes/rib")
+def get_routes(instance_id: str):
+    instance = protocol_instances.get(instance_id, None)
+    if instance is None:
+        return JSONResponse(status_code=404, content={"error": "instance not found"})
+    rslt = [route.as_json for route in instance.rib_routes]
+    return rslt
+
+
+@app.get("/instances/{instance_id}/routes/configured")
 def get_routes(instance_id: str):
     instance = protocol_instances.get(instance_id, None)
     if instance is None:
