@@ -1,7 +1,7 @@
-<p style="align-content: center;">
-<img style="align-content: center;" src="/static/images/PyRP.png">
+<p align="center">
+<img src="/static/images/PyRP.png">
 </p>
-<h1 align="center">PyRP (Python Routing Project)</h1>
+<h1 align="center">(Python Routing Project)</h1>
 
 ## Description
 
