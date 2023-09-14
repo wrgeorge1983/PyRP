@@ -2,8 +2,8 @@ from ipaddress import ip_network, ip_address
 
 import pytest
 
-from src.pbasic import RoutingProtocolBasic
-from system import Route
+from src.rp_sla import RP_SLA
+from generic.rib import Route
 
 
 @pytest.fixture
@@ -14,19 +14,19 @@ def mock_fp(mocker):
 
 @pytest.fixture
 def mock_rpb(mock_fp):
-    rpb = RoutingProtocolBasic(mock_fp, 0)
+    rpb = RP_SLA(mock_fp, 0)
     return rpb
 
 
-def test_pbasic_evaluate(mock_rpb, mock_fp):
+def test_rp_sla_evaluate(mock_rpb, mock_fp):
     prefix_a = ip_network("0.0.0.0/0")
     next_hop_a = ip_address("1.1.1.1")
     route_a = Route(prefix_a, next_hop_a)
     prefix_b = ip_network("0.0.0.0/0")
     next_hop_b = ip_address("1.1.1.2")
     route_b = Route(prefix_b, next_hop_b)
-    mock_rpb.add_confiugred_route(route_a, 1, 100)
-    mock_rpb.add_confiugred_route(route_b, 2, 50)
+    mock_rpb.add_configured_route(route_a, 1, 100)
+    mock_rpb.add_configured_route(route_b, 2, 50)
     mock_fp.ping.return_value = 75
     mock_rpb.evaluate_routes()
     configured_routes = mock_rpb.configured_routes
@@ -35,7 +35,7 @@ def test_pbasic_evaluate(mock_rpb, mock_fp):
     assert mock_rpb.up_routes[0].next_hop == next_hop_a
 
 
-def test_pbasic_export(mock_rpb, mock_fp):
+def test_rp_sla_export(mock_rpb, mock_fp):
     prefix_a = ip_network("0.0.0.0/0")
     next_hop_a = ip_address("1.1.1.1")
     route_a = Route(prefix_a, next_hop_a)
@@ -52,11 +52,11 @@ def test_pbasic_export(mock_rpb, mock_fp):
     next_hop_d = ip_address("1.1.1.2")
     route_d = Route(prefix_d, next_hop_d)
 
-    mock_rpb.add_confiugred_route(route_a, 1, 100)
-    mock_rpb.add_confiugred_route(route_b, 2, 50)
+    mock_rpb.add_configured_route(route_a, 1, 100)
+    mock_rpb.add_configured_route(route_b, 2, 50)
 
-    mock_rpb.add_confiugred_route(route_c, 1, 100)
-    mock_rpb.add_confiugred_route(route_d, 2, 100)
+    mock_rpb.add_configured_route(route_c, 1, 100)
+    mock_rpb.add_configured_route(route_d, 2, 100)
     mock_fp.ping.return_value = 75
     mock_rpb.evaluate_routes()
     assert len(mock_rpb.configured_routes) == 4

@@ -15,8 +15,8 @@ def get_path_to_config(filename: str):
 
 def test_config_load():
     cfg = Config()
-    cfg.load(get_path_to_config("pbasic.toml"))
+    cfg.load(get_path_to_config("rp_sla.toml"))
 
-    assert cfg.pbasic["admin_distance"] == 1
-    assert cfg.pbasic["threshold_measure_interval"] == 60
-    assert len(cfg.pbasic["routes"]) == 4
+    assert cfg.rp_sla["admin_distance"] == 1
+    assert cfg.rp_sla["threshold_measure_interval"] == 60
+    assert len(cfg.rp_sla["routes"]) == 4

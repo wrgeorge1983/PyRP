@@ -1,6 +1,14 @@
+import abc
 import time
+from typing import TypedDict, Type
 
-from system import IPNetwork, IPAddress, SourceCode, RouteStatus
+from src.system import IPNetwork, IPAddress, SourceCode, RouteStatus
+from src.system import IPNetwork, IPAddress
+
+
+class RouteSpec(TypedDict):
+    prefix: IPNetwork
+    next_hop: IPAddress
 
 
 class RIBRouteEntry:
@@ -18,9 +26,15 @@ class RIBRouteEntry:
         self.source = source
         self.metric = metric
         self.admin_distance = admin_distance
-        self.status = status
+        self.status = RouteStatus(status)
         self.last_updated = time.time()
-        self._value = self.prefix, self.next_hop, self.source, self.metric, self.admin_distance
+        self._value = (
+            self.prefix,
+            self.next_hop,
+            self.source,
+            self.metric,
+            self.admin_distance,
+        )
 
     def __hash__(self):
         return hash(self._value)
@@ -30,6 +44,7 @@ class RIBRouteEntry:
             return NotImplemented
 
         return self._value == other._value
+
 
 class RIB:
     """RIB is a Routing Information Base.  It is a database of routes.
@@ -149,3 +164,116 @@ class RIB:
             return rib_route_entry in self.sources[rib_route_entry.source]
         except KeyError:
             return False
+
+
+class Route:
+    intrinsic_fields = [
+        "prefix",
+        "next_hop",
+    ]
+
+    supplemental_fields = []
+
+    optional_fields = []
+
+    def __init__(
+        self,
+        prefix: IPNetwork,
+        next_hop: IPAddress,
+        *args,
+        strict: bool = True,
+        **kwargs,
+    ):
+        if strict and kwargs:
+            raise ValueError(f"unexpected fields: {kwargs.keys()}")
+        if strict and args:
+            raise ValueError(f"unexpected positional values: {args}")
+
+        self.prefix = prefix
+        self.next_hop = next_hop
+        self._value = self.prefix, self.next_hop
+
+    @property
+    def intrinsic_values(self) -> tuple:
+        results = (getattr(self, field) for field in self.intrinsic_fields)
+        return tuple(results)
+
+    @property
+    def supplimental_values(self) -> tuple:
+        results = (getattr(self, field) for field in self.supplemental_fields)
+        return tuple(results)
+
+    @property
+    def as_json(self) -> RouteSpec:
+        return {
+            "prefix": str(self.prefix),
+            "next_hop": str(self.next_hop),
+        }
+
+    def __hash__(self):
+        return hash(self._value)
+
+    def __eq__(self, other):
+        try:
+            return hash(self) == hash(other)
+        except TypeError:
+            return False
+
+
+class RIB_Base(metaclass=abc.ABCMeta):
+    def __init__(self):
+        self._table = set()
+
+    @property
+    @abc.abstractmethod
+    def route_type(self) -> Type[Route]:
+        pass
+
+    @abc.abstractmethod
+    def add(self, route: RouteSpec | Type[Route]):
+        pass
+
+    @abc.abstractmethod
+    def remove(self, route: RouteSpec | Type[Route]):
+        pass
+
+    @abc.abstractmethod
+    def discard(self, route: RouteSpec | Type[Route]):
+        pass
+
+    def _check_for_intrinsic_values(self, **kwargs) -> None:
+        missing_fields = []
+        for key in self.route_type.intrinsic_fields:
+            if key not in kwargs:
+                missing_fields.append(key)
+
+        if missing_fields:
+            raise ValueError(f"Missing Fields: {missing_fields}")
+
+    def _check_for_invalid_fields(self, **kwargs) -> None:
+        """Raises ValueError with any invalid fields that are found"""
+        valid_fields = (
+            self.route_type.intrinsic_fields
+            + self.route_type.supplemental_fields
+            + self.route_type.optional_fields
+        )
+        invalid_fields = []
+        for key in kwargs:
+            if key not in valid_fields:
+                invalid_fields.append(key)
+
+        if invalid_fields:
+            raise ValueError(f"Invalid fields: {invalid_fields}")
+
+    def _validate_fields(self, **kwargs):
+        self._check_for_intrinsic_values(**kwargs)
+        self._check_for_invalid_fields(**kwargs)
+
+    def export_routes(self) -> list[RouteSpec]:
+        result = [route.as_json for route in self._table]
+        return result
+
+    def import_routes(self, routes: list[RouteSpec]):
+        self._table = self._table.union(
+            {self.route_type(strict=False, **route) for route in routes}
+        )

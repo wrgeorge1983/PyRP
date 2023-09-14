@@ -18,3 +18,10 @@
   * rib, rib entry, route 
 * initial pytest setup
 * first tests for rib, etc.
+* initial config setup
+
+
+## Phase 3
+
+* docker container for pbasic
+* docker container for control plane
