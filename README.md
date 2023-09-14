@@ -65,11 +65,11 @@ From there you can interact with either of them via their respective APIs.  For 
 
 The best "demo" workflow that exists now is: 
 
-POST to `instances/new_from_config` with `filename` query parameter. Get the CP Instance ID.
-GET to `instances` or `instances/{instance_id}` to inspect it as-configured (note any configured static routes, but not details for rp_sla)
-POST to `instances/{instance_id}/rp_sla/evaluate_routes` to trigger rp_sla's evaluation of routes. 
-GET to `instances/{instance_id}/routes` to see the current CP RIB (won't include rp_sla yet)
-POST to `instances/{instance_id}/routes/rib/refresh` to trigger the CP to refresh its RIB from the rp_sla service
-GET to `instances/{instance_id}/routes` to see the current CP RIB (should include rp_sla routes now)
-Depending on config, the RIB may hold multiple candidate routes for any given prefix.
+POST to `instances/new_from_config` with `filename` query parameter. Get the CP Instance ID.  
+GET to `instances` or `instances/{instance_id}` to inspect it as-configured (note any configured static routes, but not details for rp_sla)  
+POST to `instances/{instance_id}/rp_sla/evaluate_routes` to trigger rp_sla's evaluation of routes.   
+GET to `instances/{instance_id}/routes` to see the current CP RIB (won't include rp_sla yet)  
+POST to `instances/{instance_id}/routes/rib/refresh` to trigger the CP to refresh its RIB from the rp_sla service  
+GET to `instances/{instance_id}/routes` to see the current CP RIB (should include rp_sla routes now)  
+Depending on config, the RIB may hold multiple candidate routes for any given prefix.  
 GET to `instances/{instance_id}/best_routes` to see the best route for each prefix in the RIB.
