@@ -71,7 +71,7 @@ def create_instance_from_config(filename: str):
 
     instance_id = generate_id()
     fp = ForwardingPlane()
-    protocol_instances[instance_id] = RP_SLA.from_config_file(config, fp)
+    protocol_instances[instance_id] = RP_SLA.from_config(config, fp)
     return {"instance_id": instance_id}
 
 
@@ -82,7 +82,7 @@ def delete_instance(instance_id: str):
 
 
 @app.get("/instances/{instance_id}/routes/rib")
-def get_routes(instance_id: str):
+def get_rib_routes(instance_id: str):
     instance = protocol_instances.get(instance_id, None)
     if instance is None:
         return JSONResponse(status_code=404, content={"error": "instance not found"})
@@ -91,7 +91,7 @@ def get_routes(instance_id: str):
 
 
 @app.get("/instances/{instance_id}/routes/configured")
-def get_routes(instance_id: str):
+def get_configured_routes(instance_id: str):
     instance = protocol_instances.get(instance_id, None)
     if instance is None:
         return JSONResponse(status_code=404, content={"error": "instance not found"})
@@ -99,7 +99,7 @@ def get_routes(instance_id: str):
     return rslt
 
 
-@app.post("/instance/{instance_id}/routes/new")
+@app.post("/instances/{instance_id}/routes/new")
 def create_route(
     instance_id: str,
     prefix: str,
@@ -115,7 +115,7 @@ def create_route(
     return {prefix: (next_hop, priority, threshold_ms)}
 
 
-@app.post("/instance/{instance_id}/routes/delete")
+@app.post("/instances/{instance_id}/routes/delete")
 def delete_route(
     instance_id: str,
     prefix: str,
@@ -130,7 +130,7 @@ def delete_route(
     return {prefix: next_hop}
 
 
-@app.post("/instance/{instance_id}/evaluate_routes")
+@app.post("/instances/{instance_id}/evaluate_routes")
 def evaluate_routes(instance_id: str):
     instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:
@@ -139,7 +139,7 @@ def evaluate_routes(instance_id: str):
     return instance.as_json
 
 
-@app.get("/instance/{instance_id}/best_routes")
+@app.get("/instances/{instance_id}/best_routes")
 def get_best_routes(instance_id: str):
     instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:

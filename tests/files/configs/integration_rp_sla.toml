@@ -1,4 +1,5 @@
 [rp_sla]
+enabled = true
 admin_distance = 1
 threshold_measure_interval = 60
 

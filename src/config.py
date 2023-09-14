@@ -22,6 +22,7 @@ def rp_sla_defaults() -> dict[str, int | list | str]:
         "admin_distance": 1,
         "threshold_measure_interval": 60,
         "routes": [],
+        "enabled": False
     }
 
     return rp_sla_config
@@ -30,6 +31,7 @@ def rp_sla_defaults() -> dict[str, int | list | str]:
 class Config:
     def __init__(self):
         self._data = {}
+        self.filename = None
         self.control_plane = control_plane_defaults()
         self.rp_sla = rp_sla_defaults()
 
@@ -41,6 +43,7 @@ class Config:
             raise ValueError("Config.load requires a .toml file")
 
         data = toml.load(path)
+        self.filename = str(path)
         self._data = data
         self.rp_sla.update(data.get("rp_sla", {}))
         self.control_plane.update(data.get("control_plane", {}))

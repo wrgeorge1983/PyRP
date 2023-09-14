@@ -14,11 +14,11 @@ class RouteStatus(Enum):
 
 
 class SourceCode(Enum):
-    STATIC = 0
-    RIP = 1
-    OSPF = 2
-    BGP = 3
-    SLA = 4
+    STATIC = "STATIC"
+    RIP = "RIP"
+    OSPF = "OSPF"
+    BGP = "BGP"
+    SLA = "SLA"
 
 
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network

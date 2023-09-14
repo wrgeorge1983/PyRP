@@ -18,39 +18,50 @@ routes will be handled as prefixes using the built-in ipaddress module.
 
 since this protocol does not have redistribution, it will only have configured routes.  Configured routes are the only routes that will be in the RIB.
 """
-import abc
 import time
-from typing import Type, Optional
+from typing import Type, Optional, TypedDict, Literal
 
 from src.config import Config
 from src.fp_interface import ForwardingPlane
-from src.system import RouteStatus, IPNetwork, IPAddress
-from src.generic.rib import Route, RouteSpec
+from src.system import RouteStatus, IPNetwork, IPAddress, SourceCode
+from src.generic.rib import Route, RouteSpec, RIB_Base
 
 
 class SLA_RouteSpec(RouteSpec):
     priority: int
     threshold_ms: int
-    last_updated: Optional[str]
+    last_updated: Optional[float]
     status: Optional[RouteStatus]
+    route_source: Literal[SourceCode.SLA]
 
 
 class SLA_Route(Route):
-    intrinsic_fields = [
-        "prefix",
-        "next_hop",
-    ]
+    intrinsic_fields = ["prefix", "next_hop"]
 
     supplemental_fields = [
         "priority",
         "threshold_ms",
     ]
 
-    optional_fields = ["last_updated", "status"]
+    optional_fields = ["last_updated", "status", "route_source"]
 
     def __init__(
-        self, prefix: IPNetwork, next_hop: IPAddress, priority: int, threshold_ms: int
+        self,
+        prefix: IPNetwork,
+        next_hop: IPAddress,
+        priority: int,
+        threshold_ms: int,
+        route_source: Optional[SourceCode] = SourceCode.SLA,
+        *args,
+        strict: bool = True,
+        **kwargs,
     ):
+        if strict:
+            if kwargs:
+                raise ValueError(f"unexpected fields: {kwargs.keys()}")
+            if args:
+                raise ValueError(f"unexpected positional values: {args}")
+
         super().__init__(prefix, next_hop)
         self.priority = priority
         self.threshold_ms = threshold_ms
@@ -62,7 +73,7 @@ class SLA_Route(Route):
         )  # including source, metric, and threshold don't seem to be a good idea
 
     @property
-    def as_json(self):
+    def as_json(self) -> SLA_RouteSpec:
         return {
             "prefix": str(self.prefix),
             "next_hop": str(self.next_hop),
@@ -70,74 +81,16 @@ class SLA_Route(Route):
             "threshold_ms": self.threshold_ms,
             "status": self.status.value,
             "last_updated": self.last_updated,
+            "route_source": SourceCode.SLA.value,
         }
 
     # __hash__ and __eq__ are defined in Route!
 
 
-class RIB_Base(metaclass=abc.ABCMeta):
-
-    def __init__(self):
-        self._table = set()
-
-    @property
-    @abc.abstractmethod
-    def route_type(self) -> Type[Route]:
-        pass
-
-    @abc.abstractmethod
-    def add(self, route: RouteSpec | Type[Route]):
-        pass
-
-    @abc.abstractmethod
-    def remove(self, route: RouteSpec | Type[Route]):
-        pass
-
-    @abc.abstractmethod
-    def discard(self, route: RouteSpec | Type[Route]):
-        pass
-
-
-    def _check_for_intrinsic_values(self, **kwargs) -> None:
-        missing_fields = []
-        for key in self.route_type.intrinsic_fields:
-            if key not in kwargs:
-                missing_fields.append(key)
-
-        if missing_fields:
-            raise ValueError(f"Missing Fields: {missing_fields}")
-
-    def _check_for_invalid_fields(self, **kwargs) -> None:
-        """Raises ValueError with any invalid fields that are found"""
-        valid_fields = (
-            self.route_type.intrinsic_fields
-            + self.route_type.supplemental_fields
-            + self.route_type.optional_fields
-        )
-        invalid_fields = []
-        for key in kwargs:
-            if key not in valid_fields:
-                invalid_fields.append(key)
-
-        if invalid_fields:
-            raise ValueError(f"Invalid fields: {invalid_fields}")
-
-    def _validate_fields(self, **kwargs):
-        self._check_for_intrinsic_values(**kwargs)
-        self._check_for_invalid_fields(**kwargs)
-
-    def export_routes(self) -> list[RouteSpec]:
-        result = [
-            route.as_json
-            for route in self._table
-        ]
-        return result
-
-    def import_routes(self, routes: list[RouteSpec]):
-        self._table = {
-            self.route_type(**route)
-            for route in routes
-        }
+class SLA_RPSpec(TypedDict):
+    admin_distance: int
+    threshold_measure_interval: int
+    configured_routes: list[SLA_RouteSpec]
 
 
 class SLA_RIB(RIB_Base):
@@ -147,7 +100,7 @@ class SLA_RIB(RIB_Base):
         self._table: set[SLA_Route] = set()
 
     @property
-    def items(self):
+    def items(self) -> set[SLA_Route]:
         return set(x for x in self._table)
 
     def add(self, route: SLA_RouteSpec | route_type):
@@ -168,8 +121,6 @@ class SLA_RIB(RIB_Base):
 
 
 class RP_SLA:
-    route_type: Type[Route] = SLA_Route
-
     def __init__(
         self,
         fp: ForwardingPlane,
@@ -195,7 +146,7 @@ class RP_SLA:
         return rslt
 
     @property
-    def as_json(self) -> dict[str, str | int | list[dict[str, str | int]]]:
+    def as_json(self) -> SLA_RPSpec:
         return {
             "admin_distance": self.admin_distance,
             "threshold_measure_interval": self._threshold_measure_interval,
@@ -214,19 +165,17 @@ class RP_SLA:
 
     @property
     def up_routes(self):
-        return [
-            route for route in self.rib_routes if route.status == RouteStatus.UP
-        ]
+        return [route for route in self.rib_routes if route.status == RouteStatus.UP]
 
-    def add_configured_route(self, route: SLA_RouteSpec | route_type):
+    def add_configured_route(self, route: SLA_RouteSpec | SLA_Route):
         self._configured_routes.add(route)
         self._rib.add(route)
 
-    def remove_configured_route(self, route: SLA_RouteSpec | route_type):
+    def remove_configured_route(self, route: SLA_RouteSpec | SLA_Route):
         self._configured_routes.discard(route)
         self._rib.discard(route)
 
-    def reset_rib(self):
+    def refresh_rib(self):
         configured_routes = self._configured_routes.export_routes()
         self._rib = SLA_RIB()
         self._rib.import_routes(configured_routes)
@@ -238,11 +187,11 @@ class RP_SLA:
             or (time.time() - sla_route.last_updated) > self._threshold_measure_interval
         ):
             try:
-                rtt = self.fp.ping(
+                rtt_ms = self.fp.ping(
                     sla_route.next_hop,
                     timeout_seconds=int(sla_route.threshold_ms / 1000),
-                )
-                if rtt <= sla_route.threshold_ms:
+                ) * 1000
+                if rtt_ms  <= sla_route.threshold_ms:
                     sla_route.status = RouteStatus.UP
                 else:
                     sla_route.status = RouteStatus.DOWN
