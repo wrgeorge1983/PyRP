@@ -31,4 +31,45 @@ protocol implementation will be a separate service.  The Control Plane service w
 and coordinating the exchange of routes between the various protocol services.
 
 ## Usage
-Notably the rp_sla service requires root access.  This is required to send and receive ICMP packets.
+Notably the rp_sla service requires root access.  This is required to send and receive ICMP packets.  Don't run this anywhere
+that sounds like a bad idea.
+
+Currently you start each service in a separate terminal or process: 
+```bash
+# Start the control plane on port 5010 (per config.toml)
+❯ pipenv shell
+Launching subshell in virtual environment...
+
+routing_protocol_o-vkX6418L ❯ python /home/wrgeo/projects/routing_protocol_o/api_control_plane.py 
+```
+```bash
+# Start the rp_sla service on port 5023 (per config.toml)
+❯ pipenv shell
+Launching subshell in virtual environment...
+
+routing_protocol_o-vkX6418L ❯ pythonSudo.sh /home/wrgeo/projects/routing_protocol_o/api_rp_sla.py  
+```
+
+Once they're both launched, you tell the control-plane to ingest config via a POST to 
+http://localhost:5010/instances/new_from_config?filename=tests/files/main.toml
+which nets an instance id in response:
+```json
+{
+    "instance_id": "84wPluBR"
+}
+```
+
+This will instantiate the control plane.  Given the config, it will also reach out to the rp_sla service and instantiate that as well.
+From there you can interact with either of them via their respective APIs.  For now you're best looking at the routes defined in
+`api_control_plane.py` and `api_rp_sla.py` to see what's available.
+
+The best "demo" workflow that exists now is: 
+
+POST to `instances/new_from_config` with `filename` query parameter. Get the CP Instance ID.
+GET to `instances` or `instances/{instance_id}` to inspect it as-configured (note any configured static routes, but not details for rp_sla)
+POST to `instances/{instance_id}/rp_sla/evaluate_routes` to trigger rp_sla's evaluation of routes. 
+GET to `instances/{instance_id}/routes` to see the current CP RIB (won't include rp_sla yet)
+POST to `instances/{instance_id}/routes/rib/refresh` to trigger the CP to refresh its RIB from the rp_sla service
+GET to `instances/{instance_id}/routes` to see the current CP RIB (should include rp_sla routes now)
+Depending on config, the RIB may hold multiple candidate routes for any given prefix.
+GET to `instances/{instance_id}/best_routes` to see the best route for each prefix in the RIB.
