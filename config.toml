@@ -6,3 +6,6 @@ listen_port = 5010  # expected defautl is 5010
 listen_address = "localhost"
 listen_port = 5023  # expected default is 5023
 
+[api_rp_rip1]
+listen_address = "localhost"
+listen_port = 5020  # expected default is 5020

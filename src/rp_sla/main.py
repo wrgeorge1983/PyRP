@@ -19,7 +19,8 @@ routes will be handled as prefixes using the built-in ipaddress module.
 since this protocol does not have redistribution, it will only have configured routes.  Configured routes are the only routes that will be in the RIB.
 """
 import time
-from typing import Type, Optional, TypedDict, Literal
+from typing import Type, Optional, Literal
+from typing_extensions import TypedDict
 
 from src.config import Config
 from src.fp_interface import ForwardingPlane

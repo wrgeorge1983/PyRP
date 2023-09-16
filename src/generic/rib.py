@@ -1,6 +1,7 @@
 import abc
 import time
-from typing import TypedDict, Type
+from typing import Type
+from typing_extensions import TypedDict
 
 from src.system import IPNetwork, IPAddress, SourceCode, RouteStatus
 from src.system import IPNetwork, IPAddress

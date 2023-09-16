@@ -6,7 +6,7 @@ import toml
 
 class ServicePorts(Enum):
     CONTROL_PLANE = 5010
-    RIP = 5020
+    RIP1 = 5020
     OSPF = 5021
     BGP = 5022
     SLA = 5023
@@ -27,6 +27,13 @@ def rp_sla_defaults() -> dict[str, int | list | str]:
 
     return rp_sla_config
 
+def rp_rip1_defaults() -> dict[str, int | list | str]:
+    rp_rip1_config = {
+        "admin_distance": 120,
+        "enabled": False
+    }
+    return rp_rip1_config
+
 
 class Config:
     def __init__(self):
@@ -34,6 +41,7 @@ class Config:
         self.filename = None
         self.control_plane = control_plane_defaults()
         self.rp_sla = rp_sla_defaults()
+        self.rp_rip1 = rp_rip1_defaults()
 
     def load(self, path: Path | str):
         if not isinstance(path, Path):
@@ -47,3 +55,4 @@ class Config:
         self._data = data
         self.rp_sla.update(data.get("rp_sla", {}))
         self.control_plane.update(data.get("control_plane", {}))
+        self.rp_rip1.update(data.get("rp_rip1", {}))

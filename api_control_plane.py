@@ -3,11 +3,11 @@ from typing import List, Optional, Union, Any
 
 import toml
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from starlette.responses import JSONResponse
 
 
-from src.control_plane.main import ControlPlane
+from src.control_plane.main import ControlPlane, CP_Spec
 from src.config import Config
 from src.fp_interface import ForwardingPlane
 from src.system import generate_id
@@ -40,15 +40,15 @@ def read_root():
 
 
 @app.get("/instances")
-def get_instances():
+def get_instances() -> dict[str, CP_Spec]:
     return {k: v.as_json for k, v in protocol_instances.items()}
 
 
 @app.get("/instances/{instance_id}")
-def get_instance(instance_id: str):
+def get_instance(instance_id: str) -> CP_Spec:
     rslt = protocol_instances.get(instance_id, None)
     if rslt is None:
-        return JSONResponse(status_code=404, content={"error": "instance not found"})
+        raise HTTPException(status_code=404, detail="instance not found")
     return rslt.as_json
 
 
@@ -58,7 +58,7 @@ def create_instance_from_config(filename: str):
     try:
         config.load(filename)
     except FileNotFoundError:
-        return JSONResponse(status_code=404, content={"error": "config file not found"})
+        raise HTTPException(status_code=404, detail="config file not found")
 
     instance_id = generate_id()
     protocol_instances[instance_id] = ControlPlane.from_config(config)
@@ -75,7 +75,7 @@ def delete_instance(instance_id: str):
 def get_routes(instance_id: str):
     instance = protocol_instances.get(instance_id, None)
     if instance is None:
-        return JSONResponse(status_code=404, content={"error": "instance not found"})
+        raise HTTPException(status_code=404, detail="instance not found")
     rslt = [route.as_json for route in instance.rib_routes]
     return rslt
 
@@ -84,7 +84,7 @@ def get_routes(instance_id: str):
 def get_routes(instance_id: str):
     instance = protocol_instances.get(instance_id, None)
     if instance is None:
-        return JSONResponse(status_code=404, content={"error": "instance not found"})
+        raise HTTPException(status_code=404, detail="instance not found")
     rslt = [route.as_json for route in instance.static_routes]
     return rslt
 
@@ -92,46 +92,16 @@ def get_routes(instance_id: str):
 def refresh_rib(instance_id: str):
     instance = protocol_instances.get(instance_id, None)
     if instance is None:
-        return JSONResponse(status_code=404, content={"error": "instance not found"})
+        raise HTTPException(status_code=404, detail="instance not found")
     instance.refresh_rib()
     return [route.as_json for route in instance.rib_routes]
-
-# @app.post("/instance/{instance_id}/routes/new")
-# def create_route(
-#     instance_id: str,
-#     prefix: str,
-#     next_hop: str,
-#     priority: int,
-#     threshold_ms: int,
-# ):
-#     instance: RP_SLA = protocol_instances.get(instance_id, None)
-#     if instance is None:
-#         return JSONResponse(status_code=404, content={"error": "instance not found"})
-#     basic_route = Route(prefix, next_hop)
-#     instance.add_configured_route(basic_route, priority, threshold_ms)
-#     return {prefix: (next_hop, priority, threshold_ms)}
-
-
-# @app.post("/instance/{instance_id}/routes/delete")
-# def delete_route(
-#     instance_id: str,
-#     prefix: str,
-#     next_hop: str,
-# ):
-#     instance: RP_SLA = protocol_instances.get(instance_id, None)
-#     if instance is None:
-#         return JSONResponse(status_code=404, content={"error": "instance not found"})
-#     basic_route = Route(prefix, next_hop)
-#
-#     instance.remove_configured_route(basic_route)
-#     return {prefix: next_hop}
 
 
 @app.post("/instances/{instance_id}/rp_sla/evaluate_routes")
 def evaluate_routes(instance_id: str):
     instance: ControlPlane = protocol_instances.get(instance_id, None)
     if instance is None:
-        return JSONResponse(status_code=404, content={"error": "instance not found"})
+        raise HTTPException(status_code=404, detail="instance not found")
     instance.rp_sla_evaluate_routes()
     return instance.as_json
 
@@ -140,7 +110,7 @@ def evaluate_routes(instance_id: str):
 def get_best_routes(instance_id: str):
     instance: ControlPlane = protocol_instances.get(instance_id, None)
     if instance is None:
-        return JSONResponse(status_code=404, content={"error": "instance not found"})
+        raise HTTPException(status_code=404, detail="instance not found")
     rslt = instance.export_routes()
     return [route.as_json for route in rslt]
 

@@ -1,13 +1,12 @@
-from typing_extensions import TypedDict
+from typing import TypedDict
 
 from .base import BaseClient
 
-
-class RpSlaClient(BaseClient):
+class RpRip1Client(BaseClient):
 
     def health_check(self):
         response = self.get("/")
-        return response.status_code == 200 and response.json() == {"Service": "RP_SLA"}
+        return response.status_code == 200 and response.json() == {"Service": "RP_RIP1"}
 
     def get_instances(self):
         response = self.get("/instances")
@@ -42,17 +41,7 @@ class RpSlaClient(BaseClient):
         response.raise_for_status()
         return response.json()
 
-    def get_configured_routes(self, instance_id):
-        response = self.get(f"/instances/{instance_id}/routes/configured")
-        response.raise_for_status()
-        return response.json()
-
     def get_best_routes(self, instance_id):
         response = self.get(f"/instances/{instance_id}/best_routes")
-        response.raise_for_status()
-        return response.json()
-
-    def evaluate_routes(self, instance_id):
-        response = self.post(f"/instances/{instance_id}/evaluate_routes")
         response.raise_for_status()
         return response.json()
