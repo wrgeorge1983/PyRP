@@ -48,8 +48,8 @@ class RpSlaClient(BaseClient):
         response.raise_for_status()
         return response.json()
 
-    def get_best_routes(self, instance_id):
-        response = self.get(f"/instances/{instance_id}/best_routes")
+    def redistribute_out(self, instance_id):
+        response = self.post(f"/instances/{instance_id}/redistribute_out")
         response.raise_for_status()
         return response.json()
 

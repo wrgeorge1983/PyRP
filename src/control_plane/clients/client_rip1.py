@@ -49,12 +49,13 @@ class RpRip1Client(BaseClient):
         response.raise_for_status()
         return response.json()
 
-    redistribute_routes_out = get_best_routes
+    def redistribute_in(self, instance_id, routes: list[RouteSpec]):
+        response = self.post(f"/instances/{instance_id}/redistribute_in", json=routes)
+        response.raise_for_status()
+        return response.json()
 
-    def redistribute_routes_in(self, instance_id, routes: list[RouteSpec]):
-        response = self.post(
-            f"/instances/{instance_id}/redistribute_routes_in", json=routes
-        )
+    def redistribute_out(self, instance_id):
+        response = self.post(f"/instances/{instance_id}/redistribute_out")
         response.raise_for_status()
         return response.json()
 

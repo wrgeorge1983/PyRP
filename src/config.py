@@ -32,8 +32,10 @@ def rp_sla_defaults() -> dict[str, int | list | str]:
 def rp_rip1_defaults() -> dict[str, int | list | str]:
     rp_rip1_config = {
         "admin_distance": 120,
+        "default_metric": 1,
         "enabled": False,
         "redistribute_static_in": False,
+        "redistribute_sla_in": False,
     }
     return rp_rip1_config
 

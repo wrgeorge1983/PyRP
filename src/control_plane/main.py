@@ -126,20 +126,26 @@ class ControlPlane:
         return [route.as_json for route in self._rib.items]
 
     def redistribute(self):
+        self._rib = CP_RIB()
         static_routes = self._static_routes.export_routes()
+        self._rib.import_routes(static_routes)
         sla_routes = (
-            self.rp_sla_client.get_best_routes(self.rp_sla_instance_id)
+            self.rp_sla_client.redistribute_out(self.rp_sla_instance_id)
             if self.rp_sla_enabled
             else []
         )
+        self._rib.import_routes(sla_routes)
+
         rip1_routes = (
-            self.rp_rip1_client.get_best_routes(self.rp_rip1_instance_id)
+            self.rp_rip1_client.redistribute_out(self.rp_rip1_instance_id)
             if self.rp_rip1_enabled
             else []
         )
-        if self.rp_rip1_enabled and self.config.rp_rip1["redistribute_static_in"]:
-            self.rp_rip1_client.redistribute_routes_in(
-                self.rp_rip1_instance_id, static_routes
+        self._rib.import_routes(rip1_routes)
+
+        if self.rp_rip1_enabled:
+            self.rp_rip1_client.redistribute_in(
+                self.rp_rip1_instance_id, self._rib.export_routes()
             )
 
     def export_routes(self) -> set[CP_Route]:

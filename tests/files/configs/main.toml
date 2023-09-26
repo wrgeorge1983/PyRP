@@ -17,6 +17,7 @@ next_hop = "192.168.1.1"
 [rp_rip1]
 enabled = true
 redistribute_static_in = true
+redistribute_sla_in = false
 
 [rp_sla]
 enabled = true

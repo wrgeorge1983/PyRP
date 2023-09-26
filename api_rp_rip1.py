@@ -1,8 +1,7 @@
 import toml
 from fastapi import FastAPI, HTTPException
-from starlette.responses import JSONResponse, Response
 
-from src.generic.rib import RouteSpec, RedistributeRouteSpec
+from src.generic.rib import  RedistributeInRouteSpec, RedistributeOutRouteSpec
 from src.config import Config
 from src.rp_rip1.main import RP_RIP1, RIP1_RPSpec, RIP1_FullRPSpec
 from src.system import generate_id
@@ -80,25 +79,25 @@ def get_rib_routes(instance_id: str):
     return rslt
 
 
-@app.get(
-    "/instances/{instance_id}/redistribute_routes_out"
-)  # probably better path to use
-@app.get("/instances/{instance_id}/best_routes")
-def get_best_routes(instance_id: str):
+@app.post("/instances/{instance_id}/redistribute_in")
+def redistribute_in(instance_id: str, routes: list[RedistributeInRouteSpec]):
     instance = protocol_instances.get(instance_id, None)
     if instance is None:
         raise HTTPException(status_code=404, detail="instance not found")
-    rslt = [route.as_json for route in instance.export_routes()]
-    return rslt
-
-
-@app.post("/instances/{instance_id}/redistribute_routes_in")
-def redistribute_routes_in(instance_id: str, routes: list[RedistributeRouteSpec]):
-    instance = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
-    instance.redistribute_routes_in(routes)
+    instance.redistribute_in(routes)
     return {}
+
+
+@app.post("/instances/{instance_id}/redistribute_out")
+def redistribute_out(instance_id: str) -> list[RedistributeOutRouteSpec]:
+    instance = protocol_instances.get(instance_id, None)
+    if instance is None:
+        raise HTTPException(status_code=404, detail="instance not found")
+
+    return list(
+        RedistributeOutRouteSpec(**route.as_json)
+        for route in instance.redistribute_out()
+    )
 
 
 @app.post("/instances/{instance_id}/routes/rib/refresh")

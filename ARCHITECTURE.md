@@ -32,6 +32,16 @@ graph TD
     A -->|RI| E
 ```
 
+1. Redistribution is always labeled from the perspective of the protocol instance.  So, "redistribute-in" means "redistribute routes into this protocol instance".
+    "redistribute-out" means "redistribute routes out of this protocol instance, into the control plane".
+2. Redistribution is always configured on the inbound protocol.  So, if you want to redistribute routes from RIPv1 into RIPv2, you would configure
+    redistribution on the RIPv2 instance, not the RIPv1 instance.
+3. Propagation from the protocols to the control plane is technically redistribution, but is always enabled and assumed.
+4. Redistribution should always only send "valid, good routes" whatever that means for the protocol
+5. Redistribution should always only send routes originated from that protocol ("split horizon" in effect).
+6. On redistribution out, protocols must set their source and admin distance
+
+## Service Components
 That is the flow between processes.  Within these processes, typically we have several core components:
 * A central "instance" class that manages the state for this instance.  It creates and manages all required RIBs,
     and is responsible for coordinating the exchange of routes between them and the outside world, etc.

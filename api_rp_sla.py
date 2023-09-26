@@ -11,7 +11,7 @@ from src.config import Config
 from src.fp_interface import ForwardingPlane
 from src.rp_sla import RP_SLA
 from src.system import generate_id
-from src.generic.rib import Route
+from src.generic.rib import Route, RedistributeOutRouteSpec
 
 BASE_CONFIG = toml.load("config.toml")
 RP_SLA_CONFIG = BASE_CONFIG["api_rp_sla"]
@@ -140,13 +140,12 @@ def evaluate_routes(instance_id: str):
     return instance.as_json
 
 
-@app.get("/instances/{instance_id}/best_routes")
-def get_best_routes(instance_id: str) -> List[SLA_RouteSpec]:
+@app.post("/instances/{instance_id}/redistribute_out")
+def redistribute_out(instance_id: str) -> list[RedistributeOutRouteSpec]:
     instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:
         raise HTTPException(status_code=404, detail="instance not found")
-    rslt = instance.redistribute_out()
-    return [route.as_json for route in rslt]
+    return [route.as_json for route in instance.redistribute_out()]
 
 
 if __name__ == "__main__":

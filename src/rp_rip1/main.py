@@ -8,13 +8,23 @@ We're going to ignore both of them for now, and truncate all redistibuted routes
 
 """
 import ipaddress
+import logging
 import time
 from typing import Literal, Optional, Type
 from typing_extensions import TypedDict
 
 from src.config import Config
-from src.generic.rib import RouteSpec, Route, RIB_Base, RedistributeRouteSpec
+from src.generic.rib import (
+    RouteSpec,
+    Route,
+    RIB_Base,
+    RedistributeInRouteSpec,
+    RedistributeOutRouteSpec,
+    RedistributeOutRoute,
+)
 from src.system import SourceCode, RouteStatus, IPNetwork, IPAddress
+
+log = logging.getLogger(__name__)
 
 
 class RIP1_RouteSpec(RouteSpec):
@@ -145,16 +155,32 @@ class RIP1_RIB(RIB_Base):
 
 
 class RP_RIP1:
-    def __init__(self, admin_distance: int = 120, default_metric: int = 1):
+    def __init__(
+        self,
+        admin_distance: int = 120,
+        default_metric: int = 1,
+        redistribute_static_in: bool = False,
+        redistribute_sla_in: bool = False,
+    ):
         self._rib = RIP1_RIB()
         self._learned_routes = RIP1_RIB()
         self._redistributed_routes = RIP1_RIB()
         self.admin_distance = admin_distance
         self.default_metric = default_metric
+        self.redistribute_in_sources = []
+        if redistribute_static_in:
+            self.redistribute_in_sources.append(SourceCode.STATIC)
+        if redistribute_sla_in:
+            self.redistribute_in_sources.append(SourceCode.SLA)
 
     @classmethod
     def from_config(cls, config: Config):
-        rslt = cls(admin_distance=config.rp_rip1["admin_distance"])
+        rslt = cls(
+            admin_distance=config.rp_rip1["admin_distance"],
+            default_metric=config.rp_rip1["default_metric"],
+            redistribute_static_in=config.rp_rip1["redistribute_static_in"],
+            redistribute_sla_in=config.rp_rip1["redistribute_sla_in"],
+        )
         return rslt
 
     @property
@@ -190,13 +216,39 @@ class RP_RIP1:
                 best_routes[route.prefix] = route
         return set(best_routes.values())
 
-    def redistribute_routes_in(
-        self, route_specs: list[RedistributeRouteSpec | RIP1_RouteSpec]
+    def redistribute_out(self) -> list[RedistributeOutRoute]:
+        routes = (
+            route for route in self._rib.items if route.route_source == SourceCode.RIP1
+        )
+        best_routes: dict[IPNetwork, RIP1_Route] = dict()
+        for route in routes:
+            if route.prefix not in best_routes:
+                best_routes[route.prefix] = route
+            elif route.metric < best_routes[route.prefix].metric:
+                best_routes[route.prefix] = route
+        return [
+            RedistributeOutRoute(
+                **route.as_json,
+                admin_distance=self.admin_distance,
+                route_source=SourceCode.RIP1,
+            )
+            for route in best_routes.values()
+        ]
+
+    def redistribute_in(
+        self, route_specs: list[RedistributeInRouteSpec | RIP1_RouteSpec]
     ):
         self._redistributed_routes = RIP1_RIB()
         for route_spec in route_specs:
             if "metric" not in route_spec:
                 route_spec["metric"] = self.default_metric
+            source = SourceCode(route_spec["route_source"])
+            if source not in self.redistribute_in_sources:
+                log.debug(
+                    f"skipping route {route_spec} because source {source} is not in {self.redistribute_in_sources}"
+                )
+                continue
+
             route = RIP1_Route(**route_spec)
             route = route.classful
             self._redistributed_routes.add(route)
