@@ -62,7 +62,7 @@ def test_rp_sla_export(mock_rpb, mock_fp):
     assert len(mock_rpb.configured_routes) == 4
     assert len(mock_rpb.up_routes) == 3
 
-    exported_routes = mock_rpb.export_routes()
+    exported_routes = mock_rpb.redistribute_out()
     assert len(exported_routes) == 2
     assert exported_routes == {route_a, route_d}
     # this works even though the objects are of different types because of the hashing and equality functions

@@ -19,12 +19,19 @@ routes will be handled as prefixes using the built-in ipaddress module.
 since this protocol does not have redistribution, it will only have configured routes.  Configured routes are the only routes that will be in the RIB.
 """
 import time
-from typing import Type, Optional, TypedDict, Literal
+from typing import Type, Optional, Literal
+from typing_extensions import TypedDict
 
 from src.config import Config
 from src.fp_interface import ForwardingPlane
 from src.system import RouteStatus, IPNetwork, IPAddress, SourceCode
-from src.generic.rib import Route, RouteSpec, RIB_Base
+from src.generic.rib import (
+    Route,
+    RouteSpec,
+    RIB_Base,
+    RedistributeOutRouteSpec,
+    RedistributeOutRoute,
+)
 
 
 class SLA_RouteSpec(RouteSpec):
@@ -32,7 +39,7 @@ class SLA_RouteSpec(RouteSpec):
     threshold_ms: int
     last_updated: Optional[float]
     status: Optional[RouteStatus]
-    route_source: Literal[SourceCode.SLA]
+    route_source: SourceCode
 
 
 class SLA_Route(Route):
@@ -67,6 +74,7 @@ class SLA_Route(Route):
         self.threshold_ms = threshold_ms
         self.status = RouteStatus.UNKNOWN
         self.last_updated = time.time()
+        self.route_source = route_source
         self._value = (
             self.prefix,
             self.next_hop,
@@ -142,6 +150,7 @@ class RP_SLA:
         )
         for route in config.rp_sla.get("routes", []):
             route: SLA_RouteSpec
+            route["route_source"] = SourceCode.SLA
             rslt.add_configured_route(route)
         return rslt
 
@@ -168,17 +177,14 @@ class RP_SLA:
         return [route for route in self.rib_routes if route.status == RouteStatus.UP]
 
     def add_configured_route(self, route: SLA_RouteSpec | SLA_Route):
+        if isinstance(route, dict):
+            route = SLA_Route(**route)
         self._configured_routes.add(route)
         self._rib.add(route)
 
     def remove_configured_route(self, route: SLA_RouteSpec | SLA_Route):
         self._configured_routes.discard(route)
         self._rib.discard(route)
-
-    def refresh_rib(self):
-        configured_routes = self._configured_routes.export_routes()
-        self._rib = SLA_RIB()
-        self._rib.import_routes(configured_routes)
 
     def evaluate_route(self, sla_route: SLA_Route):
         """evaluate_route will evaluate the given route in the RIB."""
@@ -187,11 +193,14 @@ class RP_SLA:
             or (time.time() - sla_route.last_updated) > self._threshold_measure_interval
         ):
             try:
-                rtt_ms = self.fp.ping(
-                    sla_route.next_hop,
-                    timeout_seconds=int(sla_route.threshold_ms / 1000),
-                ) * 1000
-                if rtt_ms  <= sla_route.threshold_ms:
+                rtt_ms = (
+                    self.fp.ping(
+                        sla_route.next_hop,
+                        timeout_seconds=int(sla_route.threshold_ms / 1000),
+                    )
+                    * 1000
+                )
+                if rtt_ms <= sla_route.threshold_ms:
                     sla_route.status = RouteStatus.UP
                 else:
                     sla_route.status = RouteStatus.DOWN
@@ -205,9 +214,11 @@ class RP_SLA:
         for sla_route in self._rib.items:
             self.evaluate_route(sla_route)
 
-    def export_routes(self) -> set[SLA_Route]:
-        """export_routes will return a set of only best routes (up, highest priority)."""
-        up_routes = self.up_routes
+    def redistribute_out(self) -> set[RedistributeOutRoute]:
+        """redistribute_out will return a set of only best routes (up, highest priority)."""
+        up_routes = (
+            route for route in self.up_routes if route.route_source == SourceCode.SLA
+        )
 
         best_routes: dict[IPNetwork, SLA_Route] = dict()
         for route in up_routes:
@@ -216,5 +227,10 @@ class RP_SLA:
             else:
                 if route.priority > best_routes[route.prefix].priority:
                     best_routes[route.prefix] = route
-
-        return set(best_routes.values())
+        result = set(
+            RedistributeOutRoute(
+                admin_distance=self.admin_distance, strict=False, **route.as_json
+            )
+            for route in best_routes.values()
+        )
+        return result

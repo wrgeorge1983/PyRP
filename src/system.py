@@ -15,7 +15,7 @@ class RouteStatus(Enum):
 
 class SourceCode(Enum):
     STATIC = "STATIC"
-    RIP = "RIP"
+    RIP1 = "RIP"
     OSPF = "OSPF"
     BGP = "BGP"
     SLA = "SLA"

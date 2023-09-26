@@ -1,6 +1,7 @@
 import abc
 import time
-from typing import TypedDict, Type
+from typing import Type, Optional
+from typing_extensions import TypedDict
 
 from src.system import IPNetwork, IPAddress, SourceCode, RouteStatus
 from src.system import IPNetwork, IPAddress
@@ -9,6 +10,16 @@ from src.system import IPNetwork, IPAddress
 class RouteSpec(TypedDict):
     prefix: IPNetwork
     next_hop: IPAddress
+
+
+class RedistributeInRouteSpec(RouteSpec):
+    route_source: SourceCode
+
+
+class RedistributeOutRouteSpec(RouteSpec):
+    route_source: SourceCode
+    admin_distance: int
+    last_updated: float
 
 
 class RIBRouteEntry:
@@ -218,6 +229,51 @@ class Route:
             return hash(self) == hash(other)
         except TypeError:
             return False
+
+
+class RedistributeOutRoute(Route):
+    intrinsic_fields = [
+        "prefix",
+        "next_hop",
+        "route_source",
+        "admin_distance",
+    ]
+
+    supplemental_fields = ["last_updated"]
+
+    def __init__(
+        self,
+        prefix: IPNetwork,
+        next_hop: IPAddress,
+        route_source: SourceCode | str,
+        admin_distance: int,
+        last_updated: Optional[float] = None,
+        *args,
+        strict: bool = True,
+        **kwargs,
+    ):
+        if strict and kwargs:
+            raise ValueError(f"unexpected fields: {kwargs.keys()}")
+        if strict and args:
+            raise ValueError(f"unexpected positional values: {args}")
+
+        super().__init__(prefix, next_hop)
+        self.route_source = SourceCode(route_source)
+        self.admin_distance = admin_distance
+        if last_updated is None:
+            last_updated = time.time()
+        self.last_updated = last_updated
+        self._value = self.prefix, self.next_hop, self.route_source, self.admin_distance
+
+    @property
+    def as_json(self) -> RedistributeOutRouteSpec:
+        return {
+            "prefix": str(self.prefix),
+            "next_hop": str(self.next_hop),
+            "route_source": self.route_source.value,
+            "admin_distance": self.admin_distance,
+            "last_updated": self.last_updated,
+        }
 
 
 class RIB_Base(metaclass=abc.ABCMeta):
