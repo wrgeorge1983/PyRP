@@ -106,6 +106,9 @@ itself should use higher level operations like "redistribute-in", "redistribute-
 ## Adding a new operation
 When adding a new operation, (e.g. "show routes in the rp-sla rib"), these are the general steps:
 ```mermaid
+---
+title: adding a new operation to APIs, Instances, etc.
+---
 graph TD
     subgraph one [Control Plane Service]
     U[User]
