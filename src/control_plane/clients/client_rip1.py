@@ -1,9 +1,10 @@
 from typing import TypedDict
 
+from src.generic.rib import RouteSpec
 from .base import BaseClient
 
-class RpRip1Client(BaseClient):
 
+class RpRip1Client(BaseClient):
     def health_check(self):
         response = self.get("/")
         return response.status_code == 200 and response.json() == {"Service": "RP_RIP1"}
@@ -27,7 +28,9 @@ class RpRip1Client(BaseClient):
         return response.json()
 
     def create_instance_from_config(self, filename) -> InstanceResponse:
-        response = self.post("/instances/new_from_config", params={"filename": filename})
+        response = self.post(
+            "/instances/new_from_config", params={"filename": filename}
+        )
         response.raise_for_status()
         return response.json()
 
@@ -43,5 +46,19 @@ class RpRip1Client(BaseClient):
 
     def get_best_routes(self, instance_id):
         response = self.get(f"/instances/{instance_id}/best_routes")
+        response.raise_for_status()
+        return response.json()
+
+    redistribute_routes_out = get_best_routes
+
+    def redistribute_routes_in(self, instance_id, routes: list[RouteSpec]):
+        response = self.post(
+            f"/instances/{instance_id}/redistribute_routes_in", json=routes
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def refresh_rib(self, instance_id):
+        response = self.post(f"/instances/{instance_id}/routes/rib/refresh")
         response.raise_for_status()
         return response.json()

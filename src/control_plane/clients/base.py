@@ -9,8 +9,10 @@ class BaseClient:
     def get(self, url, params=None):
         return self.session.get(self.base_url + url, params=params)
 
-    def post(self, url, params=None, data=None):
-        return self.session.post(self.base_url + url, params=params, data=data)
+    def post(self, url, params=None, data=None, json=None):
+        return self.session.post(
+            self.base_url + url, params=params, data=data, json=json
+        )
 
     def put(self, url, params=None, data=None):
         return self.session.put(self.base_url + url, params=params, data=data)

@@ -6,6 +6,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from starlette.responses import JSONResponse
 
+from src.rp_sla.main import SLA_RouteSpec
 from src.config import Config
 from src.fp_interface import ForwardingPlane
 from src.rp_sla import RP_SLA
@@ -82,7 +83,7 @@ def delete_instance(instance_id: str):
 
 
 @app.get("/instances/{instance_id}/routes/rib")
-def get_rib_routes(instance_id: str):
+def get_rib_routes(instance_id: str) -> List[SLA_RouteSpec]:
     instance = protocol_instances.get(instance_id, None)
     if instance is None:
         raise HTTPException(status_code=404, detail="instance not found")
@@ -91,7 +92,7 @@ def get_rib_routes(instance_id: str):
 
 
 @app.get("/instances/{instance_id}/routes/configured")
-def get_configured_routes(instance_id: str):
+def get_configured_routes(instance_id: str) -> List[SLA_RouteSpec]:
     instance = protocol_instances.get(instance_id, None)
     if instance is None:
         raise HTTPException(status_code=404, detail="instance not found")
@@ -140,11 +141,11 @@ def evaluate_routes(instance_id: str):
 
 
 @app.get("/instances/{instance_id}/best_routes")
-def get_best_routes(instance_id: str):
+def get_best_routes(instance_id: str) -> List[SLA_RouteSpec]:
     instance: RP_SLA = protocol_instances.get(instance_id, None)
     if instance is None:
         raise HTTPException(status_code=404, detail="instance not found")
-    rslt = instance.export_routes()
+    rslt = instance.redistribute_out()
     return [route.as_json for route in rslt]
 
 

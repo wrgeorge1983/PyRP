@@ -7,7 +7,7 @@ rp_rip1_base_url = "http://localhost:5020"  # default port is 5020
 [[control_plane.interfaces]]
 
 [[control_plane.static_routes]]
-prefix = "10.0.0.0/8"
+prefix = "10.1.1.0/24"
 next_hop = "192.168.1.1"
 
 [[control_plane.static_routes]]
@@ -16,6 +16,7 @@ next_hop = "192.168.1.1"
 
 [rp_rip1]
 enabled = true
+redistribute_static_in = true
 
 [rp_sla]
 enabled = true

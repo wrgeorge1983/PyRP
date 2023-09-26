@@ -12,6 +12,10 @@ class RouteSpec(TypedDict):
     next_hop: IPAddress
 
 
+class RedistributeRouteSpec(RouteSpec):
+    route_source: SourceCode
+
+
 class RIBRouteEntry:
     def __init__(
         self,

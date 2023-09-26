@@ -1,2 +1,2 @@
-from .rp_sla import RpSlaClient
-from .rp_rip1 import RpRip1Client
+from .client_sla import RpSlaClient
+from .client_rip1 import RpRip1Client

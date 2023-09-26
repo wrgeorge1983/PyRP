@@ -4,7 +4,6 @@ from .base import BaseClient
 
 
 class RpSlaClient(BaseClient):
-
     def health_check(self):
         response = self.get("/")
         return response.status_code == 200 and response.json() == {"Service": "RP_SLA"}
@@ -28,7 +27,9 @@ class RpSlaClient(BaseClient):
         return response.json()
 
     def create_instance_from_config(self, filename) -> InstanceResponse:
-        response = self.post("/instances/new_from_config", params={"filename": filename})
+        response = self.post(
+            "/instances/new_from_config", params={"filename": filename}
+        )
         response.raise_for_status()
         return response.json()
 

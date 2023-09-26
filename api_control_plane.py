@@ -88,6 +88,18 @@ def get_routes(instance_id: str):
     rslt = [route.as_json for route in instance.static_routes]
     return rslt
 
+
+@app.post("/instances/{instance_id}/redistribute")
+def redistribute(instance_id: str):
+    instance = protocol_instances.get(instance_id, None)
+    if instance is None:
+        raise HTTPException(status_code=404, detail="instance not found")
+
+    instance.redistribute()
+    print("asdf")
+    return instance.as_json
+
+
 @app.post("/instances/{instance_id}/routes/rib/refresh")
 def refresh_rib(instance_id: str):
     instance = protocol_instances.get(instance_id, None)

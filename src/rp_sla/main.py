@@ -33,7 +33,7 @@ class SLA_RouteSpec(RouteSpec):
     threshold_ms: int
     last_updated: Optional[float]
     status: Optional[RouteStatus]
-    route_source: Literal[SourceCode.SLA]
+    route_source: SourceCode
 
 
 class SLA_Route(Route):
@@ -188,11 +188,14 @@ class RP_SLA:
             or (time.time() - sla_route.last_updated) > self._threshold_measure_interval
         ):
             try:
-                rtt_ms = self.fp.ping(
-                    sla_route.next_hop,
-                    timeout_seconds=int(sla_route.threshold_ms / 1000),
-                ) * 1000
-                if rtt_ms  <= sla_route.threshold_ms:
+                rtt_ms = (
+                    self.fp.ping(
+                        sla_route.next_hop,
+                        timeout_seconds=int(sla_route.threshold_ms / 1000),
+                    )
+                    * 1000
+                )
+                if rtt_ms <= sla_route.threshold_ms:
                     sla_route.status = RouteStatus.UP
                 else:
                     sla_route.status = RouteStatus.DOWN
@@ -206,7 +209,7 @@ class RP_SLA:
         for sla_route in self._rib.items:
             self.evaluate_route(sla_route)
 
-    def export_routes(self) -> set[SLA_Route]:
+    def redistribute_out(self) -> set[SLA_Route]:
         """export_routes will return a set of only best routes (up, highest priority)."""
         up_routes = self.up_routes
 

@@ -110,8 +110,8 @@ When adding a new operation, (e.g. "show routes in the rp-sla rib"), these are t
 title: adding a new operation to APIs, Instances, etc.
 ---
 graph TD
-    subgraph one [Control Plane Service]
     U[User]
+    subgraph one [Control Plane Service]
     CP-API[Control Plane API]
     CP-I[Control Plane Instance]
     SLA-API-Client[RP-SLA API Client]

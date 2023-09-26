@@ -11,26 +11,29 @@ class ServicePorts(Enum):
     BGP = 5022
     SLA = 5023
 
+
 def control_plane_defaults() -> dict[str, int | list | str]:
-    control_plane_config = {
-    }
+    control_plane_config = {}
 
     return control_plane_config
+
 
 def rp_sla_defaults() -> dict[str, int | list | str]:
     rp_sla_config = {
         "admin_distance": 1,
         "threshold_measure_interval": 60,
         "routes": [],
-        "enabled": False
+        "enabled": False,
     }
 
     return rp_sla_config
 
+
 def rp_rip1_defaults() -> dict[str, int | list | str]:
     rp_rip1_config = {
         "admin_distance": 120,
-        "enabled": False
+        "enabled": False,
+        "redistribute_static_in": False,
     }
     return rp_rip1_config
 
