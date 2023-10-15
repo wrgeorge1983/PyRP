@@ -1,6 +1,7 @@
 import toml
 from fastapi import FastAPI, HTTPException
 
+from src.fp_interface import ForwardingPlane
 from src.generic.rib import  RedistributeInRouteSpec, RedistributeOutRouteSpec
 from src.config import Config
 from src.rp_rip1.main import RP_RIP1, RIP1_RPSpec, RIP1_FullRPSpec
@@ -60,7 +61,8 @@ def create_instance_from_config(filename: str):
         raise HTTPException(status_code=404, detail="config file not found")
 
     instance_id = generate_id()
-    protocol_instances[instance_id] = RP_RIP1.from_config(config)
+    fp = ForwardingPlane()
+    protocol_instances[instance_id] = RP_RIP1.from_config(config, fp)
     return {"instance_id": instance_id}
 
 

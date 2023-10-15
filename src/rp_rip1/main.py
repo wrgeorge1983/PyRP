@@ -13,6 +13,7 @@ import time
 from typing import Literal, Optional, Type
 from typing_extensions import TypedDict
 
+from src.fp_interface import ForwardingPlane
 from src.config import Config
 from src.generic.rib import (
     RouteSpec,
@@ -157,11 +158,13 @@ class RIP1_RIB(RIB_Base):
 class RP_RIP1:
     def __init__(
         self,
+        fp: ForwardingPlane,
         admin_distance: int = 120,
         default_metric: int = 1,
         redistribute_static_in: bool = False,
         redistribute_sla_in: bool = False,
     ):
+        self.fp = fp
         self._rib = RIP1_RIB()
         self._learned_routes = RIP1_RIB()
         self._redistributed_routes = RIP1_RIB()
@@ -174,8 +177,9 @@ class RP_RIP1:
             self.redistribute_in_sources.append(SourceCode.SLA)
 
     @classmethod
-    def from_config(cls, config: Config):
+    def from_config(cls, config: Config, fp: ForwardingPlane):
         rslt = cls(
+            fp,
             admin_distance=config.rp_rip1["admin_distance"],
             default_metric=config.rp_rip1["default_metric"],
             redistribute_static_in=config.rp_rip1["redistribute_static_in"],
