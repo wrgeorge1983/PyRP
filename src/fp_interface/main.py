@@ -36,7 +36,7 @@ class ForwardingPlane:
     def ping(self, dest_ip: str, timeout_seconds: int = 1) -> float:
         return self._send_ping(dest_ip, timeout_seconds)
 
-    def _send_udp(self, dest_ip: str, data: bytes, dest_port: int, src_port: Optional[int] = None):
+    def send_udp(self, dest_ip: str, data: bytes, dest_port: int, src_port: Optional[int] = None):
         udp = dpkt.udp.UDP()
         if src_port is not None:
             udp.sport = src_port
@@ -44,11 +44,9 @@ class ForwardingPlane:
         udp.data = data
         udp.ulen = len(udp)
 
-
         with self._sock(socket.AF_INET, socket.SOCK_RAW, dpkt.ip.IP_PROTO_UDP) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             sock.sendto(bytes(udp), (dest_ip, dest_port))
-
 
 
 if __name__ == "__main__":
@@ -64,13 +62,16 @@ if __name__ == "__main__":
     rte.addr = int(ipaddress.ip_address('10.0.0.0'))
     rte.next_hop = int(ipaddress.ip_address('0.0.0.0'))
     rte.metric = 1
+
     rip.rtes = [rte]
     rip.rsvd = 0
     rip.auth = None
+
     udp = dpkt.udp.UDP()
     udp.sport = 520
     udp.dport = 520
     udp.data = bytes(rip)
+
     while True:
-        fp._send_udp('255.255.255.255', bytes(rip), 520, 520)
+        fp.send_udp('255.255.255.255', bytes(rip), 520, 520)
         time.sleep(10)

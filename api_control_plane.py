@@ -31,6 +31,23 @@ def _render_output(output: object):
     return str(output)
 
 
+LATEST_INSTANCE_ID: Optional[str] = None
+
+
+def get_protocol_instance(instance_id: str) -> ControlPlane:
+    if instance_id == "latest":
+        if LATEST_INSTANCE_ID is None:
+            raise HTTPException(
+                status_code=404, detail="instance not found, 'latest' not set"
+            )
+        instance_id = LATEST_INSTANCE_ID
+
+    rslt = protocol_instances.get(instance_id, None)
+    if rslt is None:
+        raise HTTPException(status_code=404, detail=f"instance {instance_id} not found")
+    return rslt
+
+
 app = FastAPI()
 
 
@@ -45,10 +62,8 @@ def get_instances() -> dict[str, CP_Spec]:
 
 
 @app.get("/instances/{instance_id}")
-def get_instance(instance_id: str) -> CP_Spec:
-    rslt = protocol_instances.get(instance_id, None)
-    if rslt is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+def get_protocol(instance_id: str) -> CP_Spec:
+    rslt = get_protocol_instance(instance_id)
     return rslt.as_json
 
 
@@ -62,66 +77,63 @@ def create_instance_from_config(filename: str):
 
     instance_id = generate_id()
     protocol_instances[instance_id] = ControlPlane.from_config(config)
+    global LATEST_INSTANCE_ID
+    LATEST_INSTANCE_ID = instance_id
     return {instance_id: protocol_instances[instance_id].as_json}
 
 
 @app.delete("/instances/{instance_id}")
 def delete_instance(instance_id: str):
+    global LATEST_INSTANCE_ID
+    if instance_id == 'latest':
+        instance_id = LATEST_INSTANCE_ID
+        LATEST_INSTANCE_ID = None
+
+    elif LATEST_INSTANCE_ID == instance_id:
+        LATEST_INSTANCE_ID = None
+
     protocol_instances.pop(instance_id, None)
     return {"instance_id": instance_id}
 
 
 @app.get("/instances/{instance_id}/routes")
 def get_routes(instance_id: str):
-    instance = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     rslt = [route.as_json for route in instance.rib_routes]
     return rslt
 
 
 @app.get("/instances/{instance_id}/routes/static")
 def get_static_routes(instance_id: str):
-    instance = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     rslt = [route.as_json for route in instance.static_routes]
     return rslt
 
 
 @app.post("/instances/{instance_id}/redistribute")
 def redistribute(instance_id: str):
-    instance = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
-
+    instance = get_protocol_instance(instance_id)
     instance.redistribute()
     return instance.as_json
 
 
 @app.post("/instances/{instance_id}/routes/rib/refresh")
 def refresh_rib(instance_id: str):
-    instance = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     instance.refresh_rib()
     return [route.as_json for route in instance.rib_routes]
 
 
 @app.post("/instances/{instance_id}/rp_sla/evaluate_routes")
 def evaluate_routes(instance_id: str):
-    instance: ControlPlane = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     instance.rp_sla_evaluate_routes()
     return instance.as_json
 
 
 @app.get("/instances/{instance_id}/best_routes")
 def get_best_routes(instance_id: str):
-    instance: ControlPlane = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     rslt = instance.export_routes()
     return [route.as_json for route in rslt]
 

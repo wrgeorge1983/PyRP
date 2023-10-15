@@ -11,6 +11,8 @@ import ipaddress
 import logging
 import time
 from typing import Literal, Optional, Type
+
+import dpkt
 from typing_extensions import TypedDict
 
 from src.fp_interface import ForwardingPlane
@@ -26,6 +28,8 @@ from src.generic.rib import (
 from src.system import SourceCode, RouteStatus, IPNetwork, IPAddress
 
 log = logging.getLogger(__name__)
+
+RIP_MAX_METRIC = 16
 
 
 class RIP1_RouteSpec(RouteSpec):
@@ -156,13 +160,53 @@ class RIP1_RIB(RIB_Base):
 
 
 class RP_RIP1:
+    dest_ip = ipaddress.ip_address("255.255.255.255")
+    dest_port = 520
+    src_port = 520
+
+    def __init__(self, fp: ForwardingPlane, rp_interface: "RP_RIP1_Interface"):
+        self.fp = fp
+        self.rp_interface = rp_interface
+
+    @staticmethod
+    def _rte_from_route(route: RIP1_Route) -> dpkt.rip.RTE:
+        rte = dpkt.rip.RTE()
+        rte.family = 2
+        try:
+            rte.addr = int(route.prefix.network_address)
+        except AttributeError:
+            rte.addr = int(ipaddress.ip_network(route.prefix).network_address)
+        # rte.next_hop = int(route.next_hop)
+        rte.next_hop = int(ipaddress.ip_address("0.0.0.0"))  # we are always the next hop
+        rte.metric = min(route.metric + 1, RIP_MAX_METRIC)  # we're assuming link cost is always 1
+
+        return rte
+
+    def send_response(self):
+        rtes = [self._rte_from_route(route) for route in self.rp_interface.export_routes()]
+
+        rip = dpkt.rip.RIP()
+        rip.cmd = dpkt.rip.RESPONSE
+        rip.v = 1
+        rip.rsvd = 0
+        rip.auth = None
+        rip.rtes = rtes
+
+        self.fp.send_udp(str(self.dest_ip), bytes(rip), self.dest_port, self.src_port)
+
+
+
+
+class RP_RIP1_Interface:
     def __init__(
         self,
         fp: ForwardingPlane,
         admin_distance: int = 120,
         default_metric: int = 1,
         redistribute_static_in: bool = False,
+        redistribute_static_metric: int = 1,
         redistribute_sla_in: bool = False,
+        redistribute_sla_metric: int = 1,
     ):
         self.fp = fp
         self._rib = RIP1_RIB()
@@ -171,10 +215,16 @@ class RP_RIP1:
         self.admin_distance = admin_distance
         self.default_metric = default_metric
         self.redistribute_in_sources = []
+        self.redistribute_in_metrics = {
+            SourceCode.STATIC: redistribute_static_metric,
+            SourceCode.SLA: redistribute_sla_metric,
+        }
         if redistribute_static_in:
             self.redistribute_in_sources.append(SourceCode.STATIC)
         if redistribute_sla_in:
             self.redistribute_in_sources.append(SourceCode.SLA)
+
+        self._rp = RP_RIP1(self.fp, self)
 
     @classmethod
     def from_config(cls, config: Config, fp: ForwardingPlane):
@@ -183,7 +233,9 @@ class RP_RIP1:
             admin_distance=config.rp_rip1["admin_distance"],
             default_metric=config.rp_rip1["default_metric"],
             redistribute_static_in=config.rp_rip1["redistribute_static_in"],
+            redistribute_static_metric=config.rp_rip1["redistribute_static_metric"],
             redistribute_sla_in=config.rp_rip1["redistribute_sla_in"],
+            redistribute_sla_metric=config.rp_rip1["redistribute_sla_metric"],
         )
         return rslt
 
@@ -245,7 +297,10 @@ class RP_RIP1:
         self._redistributed_routes = RIP1_RIB()
         for route_spec in route_specs:
             if "metric" not in route_spec:
-                route_spec["metric"] = self.default_metric
+                route_spec["metric"] = self.redistribute_in_metrics.get(
+                    route_spec["route_source"], self.default_metric
+                )
+                route_spec["metric"] = min(route_spec["metric"], RIP_MAX_METRIC)
             source = SourceCode(route_spec["route_source"])
             if source not in self.redistribute_in_sources:
                 log.debug(
@@ -261,3 +316,6 @@ class RP_RIP1:
         self._rib = RIP1_RIB()
         self._rib.import_routes(self._redistributed_routes.export_routes())
         self._rib.import_routes(self._learned_routes.export_routes())
+
+    def send_response(self):
+        self._rp.send_response()

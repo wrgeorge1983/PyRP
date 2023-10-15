@@ -35,7 +35,9 @@ def rp_rip1_defaults() -> dict[str, int | list | str]:
         "default_metric": 1,
         "enabled": False,
         "redistribute_static_in": False,
+        "redistribute_static_metric": 1,
         "redistribute_sla_in": False,
+        "redistribute_sla_metric": 1,
     }
     return rp_rip1_config
 
