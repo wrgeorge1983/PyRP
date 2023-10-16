@@ -177,13 +177,19 @@ class RP_RIP1:
         except AttributeError:
             rte.addr = int(ipaddress.ip_network(route.prefix).network_address)
         # rte.next_hop = int(route.next_hop)
-        rte.next_hop = int(ipaddress.ip_address("0.0.0.0"))  # we are always the next hop
-        rte.metric = min(route.metric + 1, RIP_MAX_METRIC)  # we're assuming link cost is always 1
+        rte.next_hop = int(
+            ipaddress.ip_address("0.0.0.0")
+        )  # we are always the next hop
+        rte.metric = min(
+            route.metric + 1, RIP_MAX_METRIC
+        )  # we're assuming link cost is always 1
 
         return rte
 
     def send_response(self):
-        rtes = [self._rte_from_route(route) for route in self.rp_interface.export_routes()]
+        rtes = [
+            self._rte_from_route(route) for route in self.rp_interface.export_routes()
+        ]
 
         rip = dpkt.rip.RIP()
         rip.cmd = dpkt.rip.RESPONSE
@@ -193,8 +199,6 @@ class RP_RIP1:
         rip.rtes = rtes
 
         self.fp.send_udp(str(self.dest_ip), bytes(rip), self.dest_port, self.src_port)
-
-
 
 
 class RP_RIP1_Interface:
@@ -282,14 +286,23 @@ class RP_RIP1_Interface:
                 best_routes[route.prefix] = route
             elif route.metric < best_routes[route.prefix].metric:
                 best_routes[route.prefix] = route
-        return [
-            RedistributeOutRoute(
-                **route.as_json,
-                admin_distance=self.admin_distance,
-                route_source=SourceCode.RIP1,
-            )
-            for route in best_routes.values()
-        ]
+        rslt = []
+        for route in best_routes.values():
+            json_route = route.as_json
+            json_route.update({
+                "admin_distance": self.admin_distance,
+                "route_source": SourceCode.RIP1,
+            })
+            rslt.append(RedistributeOutRoute(**json_route, strict=False))
+        return rslt
+        # return [
+        #     RedistributeOutRoute(
+        #         **route.as_json,
+        #         admin_distance=self.admin_distance,
+        #         route_source=SourceCode.RIP1,
+        #     )
+        #     for route in best_routes.values()
+        # ]
 
     def redistribute_in(
         self, route_specs: list[RedistributeInRouteSpec | RIP1_RouteSpec]
@@ -319,3 +332,46 @@ class RP_RIP1_Interface:
 
     def send_response(self):
         self._rp.send_response()
+
+    def handle_response(self, rip: dpkt.rip.RIP, addr: tuple[str, int]):
+        for rte in rip.rtes:
+            try:
+                route = RIP1_Route(
+                    prefix=ipaddress.ip_network(ipaddress.ip_address(rte.addr)),
+                    next_hop=ipaddress.ip_address(rte.next_hop),
+                    metric=rte.metric,
+                )
+                classful_route = route.classful
+                if classful_route.metric >= RIP_MAX_METRIC:
+                    log.warning(f"ignoring route with metric >= {RIP_MAX_METRIC}")
+                    continue
+                if classful_route.next_hop == ipaddress.ip_address("0.0.0.0"):
+                    log.debug(f'updating next_hop of 0.0.0.0 to {addr[0]}')
+                    classful_route.next_hop = ipaddress.ip_address(addr[0])
+
+                log.info(f'classful route: {classful_route.as_json}')
+                self._learned_routes.add(classful_route)
+            except ValueError:
+                log.info(
+                    f"received invalid route: {rte.addr=}, {rte.next_hop=}, {rte.metric=}"
+                )
+                continue
+
+    def handle_udp_bytes(self, data: bytes, addr: tuple[str, int]):
+        log.debug(f"handling_udp_bytes: {data=}, {addr=}")
+        rip = dpkt.rip.RIP(data)
+        log.debug(f"received RIP packet: {rip.auth=}, {rip.data=}")
+        match rip.cmd:
+            case dpkt.rip.REQUEST:
+                log.debug(f"received RIP request: {rip.data=}")
+            case dpkt.rip.RESPONSE:
+                log.debug(f"received RIP response: {rip.data=}")
+                self.handle_response(rip, addr)
+            case _:
+                log.info(f"received RIP packet with unexpected command: {rip.cmd}")
+        return
+
+
+    async def listen_udp(self, callback: callable):
+        await self.fp.listen_udp(self._rp.dest_port, callback)
+        return

@@ -1,15 +1,19 @@
 # This module will be the initial forwarding plane implementation for our software router
 import ipaddress
+import logging
 import random
 import time
 from typing import Type, Optional
 
+import anyio
 import dpkt
 import socket
 
+log = logging.getLogger(__name__)
+
 
 class ForwardingPlane:
-    def __init__(self, *, sock: Type[socket.socket]=socket.socket):
+    def __init__(self, *, sock: Type[socket.socket] = socket.socket):
         self._sock = sock
 
     def _send_ping(self, dest_ip: str, timeout_seconds: int) -> float:
@@ -36,7 +40,9 @@ class ForwardingPlane:
     def ping(self, dest_ip: str, timeout_seconds: int = 1) -> float:
         return self._send_ping(dest_ip, timeout_seconds)
 
-    def send_udp(self, dest_ip: str, data: bytes, dest_port: int, src_port: Optional[int] = None):
+    def send_udp(
+        self, dest_ip: str, data: bytes, dest_port: int, src_port: Optional[int] = None
+    ):
         udp = dpkt.udp.UDP()
         if src_port is not None:
             udp.sport = src_port
@@ -48,30 +54,33 @@ class ForwardingPlane:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             sock.sendto(bytes(udp), (dest_ip, dest_port))
 
+    async def listen_udp(self, src_port: int, callback: callable):
+        log.info(f"listen_udp: src_port={src_port}")
+        async with await anyio.create_udp_socket(
+            local_port=src_port, local_host="0.0.0.0", reuse_port=True
+        ) as sock:
+            async for packet, (host, port) in sock:
+                log.info(f"received {packet} from {host}:{port}, calling callback")
+                callback(packet, (host, port))
 
-if __name__ == "__main__":
-    fp = ForwardingPlane()
-    # fp._send_udp('10.1.1.1', "hello".encode(), 520, 520)
+        # anyio.run(self._listen_udp, src_port, callback)
 
-    rip = dpkt.rip.RIP()
-    rip.cmd = dpkt.rip.RESPONSE
-    rip.v = 1
+        # with self._sock(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        #     sock.bind(("0.0.0.0", src_port))
+        #     while True:
+        #         data, addr = sock.recvfrom(1024)
+        #         callback(data, addr)
 
-    rte = dpkt.rip.RTE()
-    rte.family = 2
-    rte.addr = int(ipaddress.ip_address('10.0.0.0'))
-    rte.next_hop = int(ipaddress.ip_address('0.0.0.0'))
-    rte.metric = 1
 
-    rip.rtes = [rte]
-    rip.rsvd = 0
-    rip.auth = None
-
-    udp = dpkt.udp.UDP()
-    udp.sport = 520
-    udp.dport = 520
-    udp.data = bytes(rip)
-
-    while True:
-        fp.send_udp('255.255.255.255', bytes(rip), 520, 520)
-        time.sleep(10)
+# if __name__ == "__main__":
+# import socket
+# listen_addr = "0.0.0.0"
+# listen_port = 520
+# sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+# sock.bind((listen_addr, listen_port))
+# print('asdf')
+# while True:
+#     data, addr = sock.recvfrom(1024)
+#     print(f"Received {data} from {addr}")
+#     time.sleep(10)
+#     sock.sendto(data, addr)

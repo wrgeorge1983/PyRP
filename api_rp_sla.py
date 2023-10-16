@@ -1,4 +1,6 @@
 import json
+import logging
+import os
 from typing import List, Optional, Union, Any
 
 import toml
@@ -17,6 +19,20 @@ BASE_CONFIG = toml.load("config.toml")
 RP_SLA_CONFIG = BASE_CONFIG["api_rp_sla"]
 
 protocol_instances: dict[str, RP_SLA] = dict()
+
+
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+    ],
+)
+
+log = logging.getLogger(__name__)
+
+log.info("starting api_rp_sla")
+log.debug(f"RP_SLA_CONFIG: {RP_SLA_CONFIG}")
 
 
 def _render_output(output: object):

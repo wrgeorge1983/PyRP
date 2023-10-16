@@ -1,4 +1,6 @@
 import json
+import logging
+import os
 from typing import List, Optional, Union, Any
 
 import toml
@@ -17,6 +19,19 @@ BASE_CONFIG = toml.load("config.toml")
 CONTROL_PLANE_CONFIG = BASE_CONFIG["control_plane"]
 
 protocol_instances: dict[str, ControlPlane] = dict()
+
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+    ],
+)
+
+log = logging.getLogger(__name__)
+
+log.info("starting api_control_plane")
+log.debug(f"CONTROL_PLANE_CONFIG: {CONTROL_PLANE_CONFIG}")
 
 
 def _render_output(output: object):
@@ -85,7 +100,7 @@ def create_instance_from_config(filename: str):
 @app.delete("/instances/{instance_id}")
 def delete_instance(instance_id: str):
     global LATEST_INSTANCE_ID
-    if instance_id == 'latest':
+    if instance_id == "latest":
         instance_id = LATEST_INSTANCE_ID
         LATEST_INSTANCE_ID = None
 

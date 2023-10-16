@@ -1,10 +1,12 @@
+import logging
+import os
 from typing import Optional
 
 import toml
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 
 from src.fp_interface import ForwardingPlane
-from src.generic.rib import  RedistributeInRouteSpec, RedistributeOutRouteSpec
+from src.generic.rib import RedistributeInRouteSpec, RedistributeOutRouteSpec
 from src.config import Config
 from src.rp_rip1.main import RP_RIP1_Interface, RIP1_RPSpec, RIP1_FullRPSpec
 from src.system import generate_id
@@ -16,11 +18,26 @@ protocol_instances: dict[str, RP_RIP1_Interface] = dict()
 
 LATEST_INSTANCE_ID: Optional[str] = None
 
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+    ],
+)
+
+log = logging.getLogger(__name__)
+
+log.info("starting api_rp_rip1")
+log.debug(f"RP_RIP1_CONFIG: {RP_RIP1_CONFIG}")
+
 
 def get_protocol_instance(instance_id: str) -> RP_RIP1_Interface:
-    if instance_id == 'latest':
+    if instance_id == "latest":
         if LATEST_INSTANCE_ID is None:
-            raise HTTPException(status_code=404, detail="instance not found, 'latest' not set")
+            raise HTTPException(
+                status_code=404, detail="instance not found, 'latest' not set"
+            )
         instance_id = LATEST_INSTANCE_ID
 
     rslt = protocol_instances.get(instance_id, None)
@@ -114,7 +131,17 @@ def refresh_rib(instance_id: str):
 def send_response(instance_id: str):
     instance = get_protocol_instance(instance_id)
     instance.send_response()
-    return
+    return {"instance_id": instance_id}
+
+
+@app.post("/instances/{instance_id}/listen")
+async def listen(instance_id: str, background_tasks: BackgroundTasks):
+    # def callback(data, addr):
+    #     print(f"callback: received {data} from {addr}")
+
+    instance = get_protocol_instance(instance_id)
+    background_tasks.add_task(instance.listen_udp, instance.handle_udp_bytes)
+    return {"instance_id": instance_id}
 
 
 if __name__ == "__main__":
