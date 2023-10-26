@@ -35,7 +35,12 @@ def rp_rip1_defaults() -> dict[str, int | list | str]:
         "default_metric": 1,
         "enabled": False,
         "redistribute_static_in": False,
+        "redistribute_static_metric": 1,
         "redistribute_sla_in": False,
+        "redistribute_sla_metric": 1,
+        "advertisement_interval": 5,
+        "request_interval": 60,
+        "reject_own_messages": False,
     }
     return rp_rip1_config
 

@@ -63,3 +63,8 @@ class RpRip1Client(BaseClient):
         response = self.post(f"/instances/{instance_id}/routes/rib/refresh")
         response.raise_for_status()
         return response.json()
+
+    def run_protocol(self, instance_id):
+        response = self.post(f"/instances/{instance_id}/run")
+        response.raise_for_status()
+        return response.json()

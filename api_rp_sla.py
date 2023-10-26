@@ -1,4 +1,6 @@
 import json
+import logging
+import os
 from typing import List, Optional, Union, Any
 
 import toml
@@ -19,6 +21,20 @@ RP_SLA_CONFIG = BASE_CONFIG["api_rp_sla"]
 protocol_instances: dict[str, RP_SLA] = dict()
 
 
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+    ],
+)
+
+log = logging.getLogger(__name__)
+
+log.info("starting api_rp_sla")
+log.debug(f"RP_SLA_CONFIG: {RP_SLA_CONFIG}")
+
+
 def _render_output(output: object):
     if isinstance(output, dict):
         return {k: _render_output(v) for k, v in output.items()}
@@ -29,6 +45,23 @@ def _render_output(output: object):
         return output.json_render()
 
     return str(output)
+
+
+LATEST_INSTANCE_ID: Optional[str] = None
+
+
+def get_protocol_instance(instance_id: str) -> RP_SLA:
+    if instance_id == "latest":
+        if LATEST_INSTANCE_ID is None:
+            raise HTTPException(
+                status_code=404, detail="instance not found, 'latest' not set"
+            )
+        instance_id = LATEST_INSTANCE_ID
+
+    rslt = protocol_instances.get(instance_id, None)
+    if rslt is None:
+        raise HTTPException(status_code=404, detail=f"instance {instance_id} not found")
+    return rslt
 
 
 app = FastAPI()
@@ -46,9 +79,7 @@ def get_instances():
 
 @app.get("/instances/{instance_id}")
 def get_instance(instance_id: str):
-    rslt = protocol_instances.get(instance_id, None)
-    if rslt is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    rslt = get_protocol_instance(instance_id)
     return rslt.as_json
 
 
@@ -59,6 +90,9 @@ def create_instance(admin_distance: int = 1, threshold_measure_interval: int = 6
     protocol_instances[instance_id] = RP_SLA(
         fp, admin_distance, threshold_measure_interval
     )
+    global LATEST_INSTANCE_ID
+    LATEST_INSTANCE_ID = instance_id
+
     return {"instance_id": instance_id}
 
 
@@ -71,6 +105,8 @@ def create_instance_from_config(filename: str):
         raise HTTPException(status_code=404, detail="config file not found")
 
     instance_id = generate_id()
+    global LATEST_INSTANCE_ID
+    LATEST_INSTANCE_ID = instance_id
     fp = ForwardingPlane()
     protocol_instances[instance_id] = RP_SLA.from_config(config, fp)
     return {"instance_id": instance_id}
@@ -78,24 +114,27 @@ def create_instance_from_config(filename: str):
 
 @app.delete("/instances/{instance_id}")
 def delete_instance(instance_id: str):
+    global LATEST_INSTANCE_ID
+    if instance_id == "latest":
+        instance_id = LATEST_INSTANCE_ID
+        LATEST_INSTANCE_ID = None
+    elif LATEST_INSTANCE_ID == instance_id:
+        LATEST_INSTANCE_ID = None
+
     protocol_instances.pop(instance_id, None)
     return {"instance_id": instance_id}
 
 
 @app.get("/instances/{instance_id}/routes/rib")
 def get_rib_routes(instance_id: str) -> List[SLA_RouteSpec]:
-    instance = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     rslt = [route.as_json for route in instance.rib_routes]
     return rslt
 
 
 @app.get("/instances/{instance_id}/routes/configured")
 def get_configured_routes(instance_id: str) -> List[SLA_RouteSpec]:
-    instance = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     rslt = [route.as_json for route in instance.configured_routes]
     return rslt
 
@@ -108,9 +147,7 @@ def create_route(
     priority: int,
     threshold_ms: int,
 ):
-    instance: RP_SLA = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     basic_route = Route(prefix, next_hop)
     instance.add_configured_route(basic_route, priority, threshold_ms)
     return {prefix: (next_hop, priority, threshold_ms)}
@@ -122,9 +159,7 @@ def delete_route(
     prefix: str,
     next_hop: str,
 ):
-    instance: RP_SLA = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     basic_route = Route(prefix, next_hop)
 
     instance.remove_configured_route(basic_route)
@@ -133,18 +168,14 @@ def delete_route(
 
 @app.post("/instances/{instance_id}/evaluate_routes")
 def evaluate_routes(instance_id: str):
-    instance: RP_SLA = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     instance.evaluate_routes()
     return instance.as_json
 
 
 @app.post("/instances/{instance_id}/redistribute_out")
 def redistribute_out(instance_id: str) -> list[RedistributeOutRouteSpec]:
-    instance: RP_SLA = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     return [route.as_json for route in instance.redistribute_out()]
 
 

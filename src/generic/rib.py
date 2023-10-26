@@ -43,7 +43,7 @@ class RIBRouteEntry:
             self.prefix,
             self.next_hop,
             self.source,
-            self.metric,
+            # self.metric,
             self.admin_distance,
         )
 

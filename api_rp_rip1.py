@@ -1,26 +1,50 @@
-import toml
-from fastapi import FastAPI, HTTPException
+import logging
+import os
+from typing import Optional
 
-from src.generic.rib import  RedistributeInRouteSpec, RedistributeOutRouteSpec
+import toml
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+
+from src.fp_interface import ForwardingPlane
+from src.generic.rib import RedistributeInRouteSpec, RedistributeOutRouteSpec
 from src.config import Config
-from src.rp_rip1.main import RP_RIP1, RIP1_RPSpec, RIP1_FullRPSpec
+from src.rp_rip1.main import RP_RIP1_Interface, RIP1_RPSpec, RIP1_FullRPSpec
 from src.system import generate_id
 
 BASE_CONFIG = toml.load("config.toml")
 RP_RIP1_CONFIG = BASE_CONFIG["api_rp_rip1"]
 
-protocol_instances: dict[str, RP_RIP1] = dict()
+protocol_instances: dict[str, RP_RIP1_Interface] = dict()
 
-# def _render_output(output: object):
-#     if isinstance(output, dict):
-#         return {k: _render_output(v) for k, v in output.items()}
-#     if isinstance(output, (list, tuple, set)):
-#         return [_render_output(v) for v in output]
-#
-#     if hasattr(output, "json_render"):
-#         return output.json_render()
-#
-#     return str(output)
+LATEST_INSTANCE_ID: Optional[str] = None
+
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+    ],
+)
+
+log = logging.getLogger(__name__)
+
+log.info("starting api_rp_rip1")
+log.debug(f"RP_RIP1_CONFIG: {RP_RIP1_CONFIG}")
+
+
+def get_protocol_instance(instance_id: str) -> RP_RIP1_Interface:
+    if instance_id == "latest":
+        if LATEST_INSTANCE_ID is None:
+            raise HTTPException(
+                status_code=404, detail="instance not found, 'latest' not set"
+            )
+        instance_id = LATEST_INSTANCE_ID
+
+    rslt = protocol_instances.get(instance_id, None)
+    if rslt is None:
+        raise HTTPException(status_code=404, detail=f"instance {instance_id} not found")
+    return rslt
+
 
 app = FastAPI()
 
@@ -36,18 +60,14 @@ def get_instances() -> dict[str, RIP1_RPSpec]:
 
 
 @app.get("/instances/{instance_id}")
-def get_instance(instance_id: str) -> RIP1_RPSpec:
-    rslt = protocol_instances.get(instance_id, None)
-    if rslt is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+def get_protocol(instance_id: str) -> RIP1_RPSpec:
+    rslt = get_protocol_instance(instance_id)
     return rslt.as_json
 
 
 @app.get("/instances/{instance_id}/full")
 def get_instance_full(instance_id: str) -> RIP1_FullRPSpec:
-    rslt = protocol_instances.get(instance_id, None)
-    if rslt is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    rslt = get_protocol_instance(instance_id)
     return rslt.full_as_json
 
 
@@ -60,39 +80,39 @@ def create_instance_from_config(filename: str):
         raise HTTPException(status_code=404, detail="config file not found")
 
     instance_id = generate_id()
-    protocol_instances[instance_id] = RP_RIP1.from_config(config)
+    fp = ForwardingPlane()
+    protocol_instances[instance_id] = RP_RIP1_Interface.from_config(config, fp)
+    global LATEST_INSTANCE_ID
+    LATEST_INSTANCE_ID = instance_id
     return {"instance_id": instance_id}
 
 
 @app.delete("/instances/{instance_id}")
 def delete_instance(instance_id: str):
     protocol_instances.pop(instance_id, None)
+    global LATEST_INSTANCE_ID
+    if LATEST_INSTANCE_ID == instance_id:
+        LATEST_INSTANCE_ID = None
     return {"instance_id": instance_id}
 
 
 @app.get("/instances/{instance_id}/routes/rib")
 def get_rib_routes(instance_id: str):
-    instance = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     rslt = [route.as_json for route in instance.rib_routes]
     return rslt
 
 
 @app.post("/instances/{instance_id}/redistribute_in")
 def redistribute_in(instance_id: str, routes: list[RedistributeInRouteSpec]):
-    instance = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     instance.redistribute_in(routes)
     return {}
 
 
 @app.post("/instances/{instance_id}/redistribute_out")
 def redistribute_out(instance_id: str) -> list[RedistributeOutRouteSpec]:
-    instance = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
 
     return list(
         RedistributeOutRouteSpec(**route.as_json)
@@ -102,11 +122,34 @@ def redistribute_out(instance_id: str) -> list[RedistributeOutRouteSpec]:
 
 @app.post("/instances/{instance_id}/routes/rib/refresh")
 def refresh_rib(instance_id: str):
-    instance = protocol_instances.get(instance_id, None)
-    if instance is None:
-        raise HTTPException(status_code=404, detail="instance not found")
+    instance = get_protocol_instance(instance_id)
     instance.refresh_rib()
     return [route.as_json for route in instance.rib_routes]
+
+
+@app.post("/instances/{instance_id}/sendResponse")
+async def send_response(instance_id: str):
+    instance = get_protocol_instance(instance_id)
+    await instance.send_response()
+    return {"instance_id": instance_id}
+
+
+@app.post("/instances/{instance_id}/listen")
+async def listen(instance_id: str, background_tasks: BackgroundTasks):
+    # def callback(data, addr):
+    #     print(f"callback: received {data} from {addr}")
+
+    instance = get_protocol_instance(instance_id)
+    background_tasks.add_task(instance.listen)
+    return {"instance_id": instance_id}
+
+
+@app.post("/instances/{instance_id}/run")
+async def run_protocol(instance_id: str, background_tasks: BackgroundTasks):
+    """run the protocol forever, because who knows how to stop it!?"""
+    instance = get_protocol_instance(instance_id)
+    instance.run_protocol(background_tasks)
+    return {"instance_id": instance_id}
 
 
 if __name__ == "__main__":
