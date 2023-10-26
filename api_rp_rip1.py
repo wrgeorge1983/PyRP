@@ -128,9 +128,9 @@ def refresh_rib(instance_id: str):
 
 
 @app.post("/instances/{instance_id}/sendResponse")
-def send_response(instance_id: str):
+async def send_response(instance_id: str):
     instance = get_protocol_instance(instance_id)
-    instance.send_response()
+    await instance.send_response()
     return {"instance_id": instance_id}
 
 
@@ -140,7 +140,15 @@ async def listen(instance_id: str, background_tasks: BackgroundTasks):
     #     print(f"callback: received {data} from {addr}")
 
     instance = get_protocol_instance(instance_id)
-    background_tasks.add_task(instance.listen_udp, instance.handle_udp_bytes)
+    background_tasks.add_task(instance.listen)
+    return {"instance_id": instance_id}
+
+
+@app.post("/instances/{instance_id}/run")
+async def run_protocol(instance_id: str, background_tasks: BackgroundTasks):
+    """run the protocol forever, because who knows how to stop it!?"""
+    instance = get_protocol_instance(instance_id)
+    instance.run_protocol(background_tasks)
     return {"instance_id": instance_id}
 
 

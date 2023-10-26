@@ -16,6 +16,19 @@ class ForwardingPlane:
     def __init__(self, *, sock: Type[socket.socket] = socket.socket):
         self._sock = sock
 
+    @staticmethod
+    def get_local_ip() -> str:
+        try:
+            # Create a new socket using the Internet address family
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # Try to connect to an IP outside the local network (doesn't actually establish a connection)
+            s.connect(("8.8.8.8", 80))
+            ip_address = s.getsockname()[0]
+            s.close()
+            return ip_address
+        except Exception:
+            return "127.0.0.1"
+
     def _send_ping(self, dest_ip: str, timeout_seconds: int) -> float:
         icmp_echo = dpkt.icmp.ICMP.Echo()
         icmp_echo.id = random.randint(0, 65535)

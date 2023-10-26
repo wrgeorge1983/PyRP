@@ -51,6 +51,8 @@ class ControlPlane:
                 filename=self.config.filename
             )
             self.rp_rip1_instance_id = result["instance_id"]
+            self.rp_rip1_client.run_protocol(self.rp_rip1_instance_id)
+
 
     @classmethod
     def from_config(cls, config: Config):

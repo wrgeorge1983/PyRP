@@ -20,6 +20,9 @@ redistribute_static_in = true
 redistribute_static_metric = 5
 redistribute_sla_in = true
 redistribute_sla_metric = 1
+advertisement_interval = 0
+request_interval = 10
+reject_own_messages = false
 
 [rp_sla]
 enabled = true
