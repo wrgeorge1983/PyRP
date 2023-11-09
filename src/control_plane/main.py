@@ -38,24 +38,26 @@ class ControlPlane:
         self._rib = CP_RIB()
         self.config: Optional[Config] = None
 
-    def initialize_rp_sla(self):
+    def initialize_rp_sla(self, instance_id):
         if self.rp_sla_enabled:
             result = self.rp_sla_client.create_instance_from_config(
-                filename=self.config.filename
+                filename=self.config.filename,
+                cp_id=instance_id,
             )
             self.rp_sla_instance_id = result["instance_id"]
 
-    def initialize_rp_rip1(self):
+    def initialize_rp_rip1(self, instance_id):
         if self.rp_rip1_enabled:
             result = self.rp_rip1_client.create_instance_from_config(
-                filename=self.config.filename
+                filename=self.config.filename,
+                cp_id=instance_id
             )
             self.rp_rip1_instance_id = result["instance_id"]
             self.rp_rip1_client.run_protocol(self.rp_rip1_instance_id)
 
 
     @classmethod
-    def from_config(cls, config: Config):
+    def from_config(cls, config: Config, instance_id: Optional[str] = None):
         if config.rp_sla["enabled"]:
             rp_sla_client = RpSlaClient(config.control_plane["rp_sla_base_url"])
         else:
@@ -68,8 +70,8 @@ class ControlPlane:
 
         rslt = cls(config.control_plane["hostname"], rp_sla_client, rp_rip1_client)
         rslt.config = config
-        rslt.initialize_rp_sla()
-        rslt.initialize_rp_rip1()
+        rslt.initialize_rp_sla(instance_id=instance_id)
+        rslt.initialize_rp_rip1(instance_id=instance_id)
 
         for route in config.control_plane["static_routes"]:
             route: CP_StaticRouteSpec

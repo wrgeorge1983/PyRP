@@ -24,6 +24,7 @@ def rp_sla_defaults() -> dict[str, int | list | str]:
         "threshold_measure_interval": 60,
         "routes": [],
         "enabled": False,
+        "trigger_redistribution": False,
     }
 
     return rp_sla_config
@@ -41,6 +42,7 @@ def rp_rip1_defaults() -> dict[str, int | list | str]:
         "advertisement_interval": 5,
         "request_interval": 60,
         "reject_own_messages": False,
+        "trigger_redistribution": False,
     }
     return rp_rip1_config
 

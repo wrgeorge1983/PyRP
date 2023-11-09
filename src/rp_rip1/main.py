@@ -127,6 +127,7 @@ class RIP1_Route(Route):
 class RIP1_RPSpec(TypedDict):
     admin_distance: int
     default_metric: int
+    cp_id: Optional[str]
 
 
 class RIP1_FullRPSpec(RIP1_RPSpec):
@@ -163,9 +164,9 @@ class RIP1_RIB(RIB_Base):
 
 
 class RP_RIP1:
-    dest_ip = ipaddress.ip_address("255.255.255.255")
-    dest_port = 520
-    src_port = 520
+    default_dst_ip = ipaddress.ip_address("255.255.255.255")
+    default_dst_port = 520
+    default_src_port = 520
 
     def __init__(self, fp: ForwardingPlane, rp_interface: "RP_RIP1_Interface"):
         """This is the inner class for the protocol itself, responsible primarily for message passing to/from the FP"""
@@ -190,7 +191,13 @@ class RP_RIP1:
 
         return rte
 
-    def send_response(self):
+    def send_response(self, dst_ip: Optional[str] = None, dst_port: Optional[int] = None):
+        if dst_ip is None:
+            dst_ip = str(self.default_dst_ip)
+
+        if dst_port is None:
+            dst_port = self.default_dst_port
+
         log.info(f'sending response msg')
         rtes = [
             self._rte_from_route(route) for route in self.rp_interface.export_routes()
@@ -203,7 +210,7 @@ class RP_RIP1:
         rip.auth = None
         rip.rtes = rtes
 
-        self.fp.send_udp(str(self.dest_ip), bytes(rip), self.dest_port, self.src_port)
+        self.fp.send_udp(bytes(rip), dst_ip, dst_port, self.default_src_port)
 
     def send_request(self):
         log.info(f'sending request message')
@@ -214,13 +221,14 @@ class RP_RIP1:
         rip.auth = None
         rip.rtes = []
 
-        self.fp.send_udp(str(self.dest_ip), bytes(rip), self.dest_port, self.src_port)
+        self.fp.send_udp(bytes(rip), str(self.default_dst_ip), self.default_dst_port, self.default_src_port)
 
     @staticmethod
     def handle_response(
-        rip_pkt: dpkt.rip.RIP, src_addr: tuple[str, int]
+        rip_pkt: dpkt.rip.RIP, src_tuple: tuple[str, int]
     ) -> list[RIP1_Route]:
         """In RIPv1 a 'Response' is always and exclusively the message that contains route entries"""
+        src_ip, src_port = src_tuple
         routes: list[RIP1_Route] = []
         for rte in rip_pkt.rtes:
             try:
@@ -235,8 +243,8 @@ class RP_RIP1:
                     continue
 
                 if classful_route.next_hop == ipaddress.ip_address("0.0.0.0"):
-                    log.debug(f"updating next_hop of 0.0.0.0 to {src_addr[0]}")
-                    classful_route.next_hop = ipaddress.ip_address(src_addr[0])
+                    log.debug(f"updating next_hop of 0.0.0.0 to {src_ip}")
+                    classful_route.next_hop = ipaddress.ip_address(src_ip)
 
                 log.info(f"classful route: {classful_route.as_json}")
                 routes.append(classful_route)
@@ -247,34 +255,36 @@ class RP_RIP1:
                 continue
         return routes
 
-    def handle_udp_bytes(self, data: bytes, addr: tuple[str, int]):
-        log.debug(f"handling_udp_bytes: {data=}, {addr=}")
+    def handle_udp_bytes(self, data: bytes, src_tuple: tuple[str, int]):
+        src_ip, src_port = src_tuple
+        log.debug(f"handling_udp_bytes: {data=}, {src_tuple=}")
         rip_pkt = dpkt.rip.RIP(data)
         log.debug(f"received RIP packet: {rip_pkt.auth=}, {rip_pkt.data=}")
-        if addr[0] == self.fp.get_local_ip():
+        if src_ip == self.fp.get_local_ip():
             if self.rp_interface.reject_own_messages:
                 log.debug(f'ignoring own message!')
                 return
+
             log.debug(f'processing message from self!!!')
 
         match rip_pkt.cmd:
             case dpkt.rip.REQUEST:  # this type of message is requesting route advertisements
                 log.debug(f"received RIP request: {rip_pkt.data=}")
-                self.send_response()
+                self.send_response(dst_ip=src_ip, dst_port=src_port)
 
             case dpkt.rip.RESPONSE:  # this type of message is always for route advertisements (even event triggered ones)
                 log.debug(f"received RIP response: {rip_pkt.data=}")
-                routes = self.handle_response(rip_pkt, addr)
+                routes = self.handle_response(rip_pkt, src_tuple)
                 for route in routes:
                     self.rp_interface._learned_routes.add(route)
-
+                self.rp_interface.refresh_rib()
             case _:
                 log.info(f"received RIP packet with unexpected command: {rip_pkt.cmd}")
 
         return
 
     async def listen(self):
-        await self.fp.listen_udp(self.dest_port, self.handle_udp_bytes)
+        await self.fp.listen_udp(self.default_dst_port, self.handle_udp_bytes)
 
 
 class RP_RIP1_Interface:
@@ -291,6 +301,8 @@ class RP_RIP1_Interface:
         advertisement_interval: int = 5,
         request_interval: int = 30,
         reject_own_messages: bool = False,
+        cp_id: str = None,
+            trigger_redistribution: bool = False,
     ):
         self.fp = fp
         self._rib = RIP1_RIB()
@@ -310,9 +322,11 @@ class RP_RIP1_Interface:
         if redistribute_sla_in:
             self.redistribute_in_sources.append(SourceCode.SLA)
 
-        self._rp = RP_RIP1(self.fp, self)
         self.small_rand_sleeps = True
         self.reject_own_messages = reject_own_messages
+        self.trigger_redistribution = trigger_redistribution
+        self._rp = RP_RIP1(self.fp, self)
+        self.cp_id = cp_id
 
     @staticmethod
     def small_sleep():
@@ -321,7 +335,7 @@ class RP_RIP1_Interface:
         time.sleep(duration_ms)
 
     @classmethod
-    def from_config(cls, config: Config, fp: ForwardingPlane):
+    def from_config(cls, config: Config, fp: ForwardingPlane, cp_id: str):
         rslt = cls(
             fp,
             admin_distance=config.rp_rip1["admin_distance"],
@@ -332,7 +346,9 @@ class RP_RIP1_Interface:
             redistribute_sla_metric=config.rp_rip1["redistribute_sla_metric"],
             advertisement_interval=config.rp_rip1["advertisement_interval"],
             request_interval=config.rp_rip1["request_interval"],
-            reject_own_messages=config.rp_rip1["reject_own_messages"]
+            reject_own_messages=config.rp_rip1["reject_own_messages"],
+            cp_id=cp_id,
+            trigger_redistribution=config.rp_rip1["trigger_redistribution"],
         )
         return rslt
 
@@ -341,6 +357,7 @@ class RP_RIP1_Interface:
         return {
             "admin_distance": self.admin_distance,
             "default_metric": self.default_metric,
+            "cp_id": self.cp_id,
         }
 
     @property
@@ -353,6 +370,7 @@ class RP_RIP1_Interface:
                 route.as_json for route in self._redistributed_routes.items
             ],
             "learned_routes": [route.as_json for route in self._learned_routes.items],
+            "cp_id": self.cp_id,
         }
 
     @property

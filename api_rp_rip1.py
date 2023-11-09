@@ -72,7 +72,7 @@ def get_instance_full(instance_id: str) -> RIP1_FullRPSpec:
 
 
 @app.post("/instances/new_from_config")
-def create_instance_from_config(filename: str):
+def create_instance_from_config(filename: str, cp_id: Optional[str] = None):
     config = Config()
     try:
         config.load(filename)
@@ -81,7 +81,7 @@ def create_instance_from_config(filename: str):
 
     instance_id = generate_id()
     fp = ForwardingPlane()
-    protocol_instances[instance_id] = RP_RIP1_Interface.from_config(config, fp)
+    protocol_instances[instance_id] = RP_RIP1_Interface.from_config(config, fp, cp_id)
     global LATEST_INSTANCE_ID
     LATEST_INSTANCE_ID = instance_id
     return {"instance_id": instance_id}

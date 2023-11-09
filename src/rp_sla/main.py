@@ -99,6 +99,8 @@ class SLA_RPSpec(TypedDict):
     admin_distance: int
     threshold_measure_interval: int
     configured_routes: list[SLA_RouteSpec]
+    cp_id: Optional[str]
+    trigger_redistribution: bool
 
 
 class SLA_RIB(RIB_Base):
@@ -134,19 +136,25 @@ class RP_SLA:
         fp: ForwardingPlane,
         threshold_measure_interval: int = 60,
         admin_distance: int = 1,
+        cp_id: Optional[str] = None,
+            trigger_redistribution: bool = False,
     ):
         self.fp = fp
         self._configured_routes = SLA_RIB()
         self._rib = SLA_RIB()
         self._threshold_measure_interval = threshold_measure_interval
         self.admin_distance = admin_distance
+        self.cp_id = cp_id
+        self.trigger_redistribution = trigger_redistribution
 
     @classmethod
-    def from_config(cls, config: Config, fp: ForwardingPlane):
+    def from_config(cls, config: Config, fp: ForwardingPlane, cp_id: str):
         rslt = cls(
             fp,
             config.rp_sla.get("threshold_measure_interval", 60),
             config.rp_sla.get("admin_distance", 1),
+            cp_id=cp_id,
+            trigger_redistribution=config.rp_sla.get("trigger_redistribution", False),
         )
         for route in config.rp_sla.get("routes", []):
             route: SLA_RouteSpec
@@ -162,6 +170,8 @@ class RP_SLA:
             "configured_routes": [
                 route.as_json for route in self._configured_routes.items
             ],
+            "cp_id": self.cp_id,
+            "trigger_redistribution": self.trigger_redistribution,
         }
 
     @property

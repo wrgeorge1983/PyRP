@@ -53,9 +53,7 @@ class ForwardingPlane:
     def ping(self, dest_ip: str, timeout_seconds: int = 1) -> float:
         return self._send_ping(dest_ip, timeout_seconds)
 
-    def send_udp(
-        self, dest_ip: str, data: bytes, dest_port: int, src_port: Optional[int] = None
-    ):
+    def send_udp(self, data: bytes, dest_ip: str, dest_port: int, src_port: Optional[int] = None):
         udp = dpkt.udp.UDP()
         if src_port is not None:
             udp.sport = src_port

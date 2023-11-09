@@ -97,7 +97,7 @@ def create_instance(admin_distance: int = 1, threshold_measure_interval: int = 6
 
 
 @app.post("/instances/new_from_config")
-def create_instance_from_config(filename: str):
+def create_instance_from_config(filename: str, cp_id: Optional[str] = None):
     config = Config()
     try:
         config.load(filename)
@@ -108,7 +108,7 @@ def create_instance_from_config(filename: str):
     global LATEST_INSTANCE_ID
     LATEST_INSTANCE_ID = instance_id
     fp = ForwardingPlane()
-    protocol_instances[instance_id] = RP_SLA.from_config(config, fp)
+    protocol_instances[instance_id] = RP_SLA.from_config(config, fp, cp_id=cp_id)
     return {"instance_id": instance_id}
 
 
