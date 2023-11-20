@@ -137,7 +137,7 @@ class RP_SLA:
         threshold_measure_interval: int = 60,
         admin_distance: int = 1,
         cp_id: Optional[str] = None,
-            trigger_redistribution: bool = False,
+        trigger_redistribution: bool = False,
     ):
         self.fp = fp
         self._configured_routes = SLA_RIB()

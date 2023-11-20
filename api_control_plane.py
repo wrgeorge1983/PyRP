@@ -91,7 +91,9 @@ def create_instance_from_config(filename: str):
         raise HTTPException(status_code=404, detail="config file not found")
 
     instance_id = generate_id()
-    protocol_instances[instance_id] = ControlPlane.from_config(config, instance_id=instance_id)
+    protocol_instances[instance_id] = ControlPlane.from_config(
+        config, instance_id=instance_id
+    )
     global LATEST_INSTANCE_ID
     LATEST_INSTANCE_ID = instance_id
     return {instance_id: protocol_instances[instance_id].as_json}

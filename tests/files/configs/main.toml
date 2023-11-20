@@ -20,8 +20,8 @@ redistribute_static_in = true
 redistribute_static_metric = 5
 redistribute_sla_in = true
 redistribute_sla_metric = 1
-advertisement_interval = 5
-request_interval = 120
+advertisement_interval = 120
+request_interval = 5
 reject_own_messages = true
 trigger_redistribution = true
 

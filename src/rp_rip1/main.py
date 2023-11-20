@@ -33,6 +33,7 @@ from src.system import SourceCode, RouteStatus, IPNetwork, IPAddress
 log = logging.getLogger(__name__)
 
 RIP_MAX_METRIC = 16
+RIP_LISTEN_INTERVAL = 5
 
 
 class RIP1_RouteSpec(RouteSpec):
@@ -164,7 +165,7 @@ class RIP1_RIB(RIB_Base):
 
 
 class RP_RIP1:
-    default_dst_ip = ipaddress.ip_address("255.255.255.255")
+    default_dst_ip = ipaddress.ip_address("172.24.0.255")
     default_dst_port = 520
     default_src_port = 520
 
@@ -191,14 +192,16 @@ class RP_RIP1:
 
         return rte
 
-    def send_response(self, dst_ip: Optional[str] = None, dst_port: Optional[int] = None):
+    def send_response(
+        self, dst_ip: Optional[str] = None, dst_port: Optional[int] = None
+    ) -> int:
         if dst_ip is None:
             dst_ip = str(self.default_dst_ip)
 
         if dst_port is None:
             dst_port = self.default_dst_port
 
-        log.info(f'sending response msg')
+        log.info(f"sending response msg")
         rtes = [
             self._rte_from_route(route) for route in self.rp_interface.export_routes()
         ]
@@ -210,18 +213,29 @@ class RP_RIP1:
         rip.auth = None
         rip.rtes = rtes
 
-        self.fp.send_udp(bytes(rip), dst_ip, dst_port, self.default_src_port)
+        return self.fp.send_udp(bytes(rip), dst_ip, dst_port, self.default_src_port)
 
-    def send_request(self):
-        log.info(f'sending request message')
+    def send_request(self) -> int:
+        log.info(f"sending request message")
         rip = dpkt.rip.RIP()
         rip.cmd = dpkt.rip.REQUEST
         rip.v = 1
         rip.rsvd = 0
         rip.auth = None
-        rip.rtes = []
 
-        self.fp.send_udp(bytes(rip), str(self.default_dst_ip), self.default_dst_port, self.default_src_port)
+        request_rte = dpkt.rip.RTE()
+        request_rte.family = 0
+        request_rte.addr = 0
+        request_rte.metric = RIP_MAX_METRIC
+
+        rip.rtes = [request_rte]
+
+        return self.fp.send_udp(
+            bytes(rip),
+            str(self.default_dst_ip),
+            self.default_dst_port,
+            # self.default_src_port,
+        )
 
     @staticmethod
     def handle_response(
@@ -262,10 +276,10 @@ class RP_RIP1:
         log.debug(f"received RIP packet: {rip_pkt.auth=}, {rip_pkt.data=}")
         if src_ip == self.fp.get_local_ip():
             if self.rp_interface.reject_own_messages:
-                log.debug(f'ignoring own message!')
+                log.debug(f"ignoring own message!")
                 return
 
-            log.debug(f'processing message from self!!!')
+            log.debug(f"processing message from self!!!")
 
         match rip_pkt.cmd:
             case dpkt.rip.REQUEST:  # this type of message is requesting route advertisements
@@ -283,12 +297,21 @@ class RP_RIP1:
 
         return
 
-    async def listen(self):
-        await self.fp.listen_udp(self.default_dst_port, self.handle_udp_bytes)
+    async def listen(self, src_port: Optional[int] = None):
+        if src_port is None:
+            src_port = self.default_src_port
+        await self.fp.listen_udp(src_port, self.handle_udp_bytes)
+
+    async def listen_timed(self, src_port: Optional[int] = None, timeout_seconds: int = 0):
+        if timeout_seconds == 0:
+            await self.listen(src_port)  # no timeout
+        else:
+            await self.fp.listen_udp_timed(src_port, self.handle_udp_bytes, timeout_seconds)
 
 
 class RP_RIP1_Interface:
     """This is the outer interface for the routing protocol"""
+
     def __init__(
         self,
         fp: ForwardingPlane,
@@ -302,7 +325,7 @@ class RP_RIP1_Interface:
         request_interval: int = 30,
         reject_own_messages: bool = False,
         cp_id: str = None,
-            trigger_redistribution: bool = False,
+        trigger_redistribution: bool = False,
     ):
         self.fp = fp
         self._rib = RIP1_RIB()
@@ -331,7 +354,7 @@ class RP_RIP1_Interface:
     @staticmethod
     def small_sleep():
         duration_ms = random.randint(0, 300) / 1000
-        log.info(f'sleeping for {duration_ms} ms')
+        log.info(f"sleeping for {duration_ms} ms")
         time.sleep(duration_ms)
 
     @classmethod
@@ -446,26 +469,28 @@ class RP_RIP1_Interface:
     async def send_response(self):
         self._rp.send_response()
 
-    async def send_request(self):
-        self._rp.send_request()
+    async def send_request(self) -> int:
+        return self._rp.send_request()
 
     async def listen(self):
         await self._rp.listen()
 
     async def run_advertisements(self):
-        log.info(f'in async def run_advertisements')
+        log.info(f"in async def run_advertisements")
         while True:
             await self.send_response()
             await asyncio.sleep(self.advertisement_interval)
 
     async def run_requests(self):
-        log.info(f'in async def run_requests')
+        log.info(f"in async def run_requests")
         while True:
-            await self.send_request()
-            await asyncio.sleep(self.request_interval)
+            port = await self.send_request()
+            log.info(f'request sent on port {port}')
+            await self._rp.listen_timed(port, self.request_interval - 1)
+            log.info(f'listening on port {port}')
 
     def run_protocol(self, background_tasks: BackgroundTasks):
-        log.info('about to listen')
+        log.info("about to listen")
 
         asyncio.create_task(self.listen())
         if self.request_interval > 0:
