@@ -49,12 +49,10 @@ class ControlPlane:
     def initialize_rp_rip1(self, instance_id):
         if self.rp_rip1_enabled:
             result = self.rp_rip1_client.create_instance_from_config(
-                filename=self.config.filename,
-                cp_id=instance_id
+                filename=self.config.filename, cp_id=instance_id
             )
             self.rp_rip1_instance_id = result["instance_id"]
             self.rp_rip1_client.run_protocol(self.rp_rip1_instance_id)
-
 
     @classmethod
     def from_config(cls, config: Config, instance_id: Optional[str] = None):

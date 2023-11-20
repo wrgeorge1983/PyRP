@@ -28,7 +28,9 @@ class RpSlaClient(BaseClient):
         response.raise_for_status()
         return response.json()
 
-    def create_instance_from_config(self, filename, cp_id: Optional[str] = None) -> InstanceResponse:
+    def create_instance_from_config(
+        self, filename, cp_id: Optional[str] = None
+    ) -> InstanceResponse:
         response = self.post(
             "/instances/new_from_config", params={"filename": filename, "cp_id": cp_id}
         )

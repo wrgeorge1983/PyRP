@@ -81,7 +81,9 @@ class ForwardingPlane:
                 log.info(f"received {packet} from {host}:{port}, calling callback")
                 callback(packet, (host, port))
 
-    async def listen_udp_timed(self, src_port: int, callback: callable, timeout_seconds: int):
+    async def listen_udp_timed(
+        self, src_port: int, callback: callable, timeout_seconds: int
+    ):
         try:
             await asyncio.wait_for(self.listen_udp(src_port, callback), timeout_seconds)
         except asyncio.TimeoutError:

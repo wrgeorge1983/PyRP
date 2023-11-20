@@ -2,10 +2,11 @@ from .base import BaseClient
 
 
 class RpCpClient(BaseClient):
-
     def health_check(self):
         response = self.get("/")
-        return response.status_code == 200 and response.json() == {"Service": "ControlPlane"}
+        return response.status_code == 200 and response.json() == {
+            "Service": "ControlPlane"
+        }
 
     def get_instances(self):
         response = self.get("/instances")

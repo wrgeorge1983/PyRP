@@ -302,11 +302,15 @@ class RP_RIP1:
             src_port = self.default_src_port
         await self.fp.listen_udp(src_port, self.handle_udp_bytes)
 
-    async def listen_timed(self, src_port: Optional[int] = None, timeout_seconds: int = 0):
+    async def listen_timed(
+        self, src_port: Optional[int] = None, timeout_seconds: int = 0
+    ):
         if timeout_seconds == 0:
             await self.listen(src_port)  # no timeout
         else:
-            await self.fp.listen_udp_timed(src_port, self.handle_udp_bytes, timeout_seconds)
+            await self.fp.listen_udp_timed(
+                src_port, self.handle_udp_bytes, timeout_seconds
+            )
 
 
 class RP_RIP1_Interface:
@@ -485,9 +489,9 @@ class RP_RIP1_Interface:
         log.info(f"in async def run_requests")
         while True:
             port = await self.send_request()
-            log.info(f'request sent on port {port}')
+            log.info(f"request sent on port {port}")
             await self._rp.listen_timed(port, self.request_interval - 1)
-            log.info(f'listening on port {port}')
+            log.info(f"listening on port {port}")
 
     def run_protocol(self, background_tasks: BackgroundTasks):
         log.info("about to listen")
