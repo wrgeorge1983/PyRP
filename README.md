@@ -73,3 +73,17 @@ POST to `instances/{instance_id}/routes/rib/refresh` to trigger the CP to refres
 GET to `instances/{instance_id}/routes` to see the current CP RIB (should include rp_sla routes now)  
 Depending on config, the RIB may hold multiple candidate routes for any given prefix.  
 GET to `instances/{instance_id}/best_routes` to see the best route for each prefix in the RIB.
+
+
+## WSL Networking
+in order to give these services direct access to the network, we need to do some extra work in WSL.  This is because WSL 
+is NAT'd by default, and thus interferes with several protocols.  To get around this, we need to do the following:
+* disable any existing bridge interfaces
+  * this means just unchecking the ipv4 stack in the windows network adapter properties
+* open hyper-v virtual switch manager, be sure to use 'as Administrator'
+  * sometimes it doesn't work, and you just have to close and re-open :shrug:
+  * find the switch for WSL and update its settings to bridge with your external network.  
+    * probably need to 'allow management operating system to share this network adapter'
+    * apply, ok, etc.
+* `sudo ip addr flush dev eth0`
+* `sudo dhclient`

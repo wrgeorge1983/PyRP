@@ -1,4 +1,5 @@
 # This module will be the initial forwarding plane implementation for our software router
+import asyncio
 import ipaddress
 import logging
 import random
@@ -54,11 +55,13 @@ class ForwardingPlane:
         return self._send_ping(dest_ip, timeout_seconds)
 
     def send_udp(
-        self, dest_ip: str, data: bytes, dest_port: int, src_port: Optional[int] = None
-    ):
+        self, data: bytes, dest_ip: str, dest_port: int, src_port: Optional[int] = None
+    ) -> int:
         udp = dpkt.udp.UDP()
-        if src_port is not None:
-            udp.sport = src_port
+        if src_port is None:
+            src_port = random.randint(1024, 65535)
+
+        udp.sport = src_port
         udp.dport = dest_port
         udp.data = data
         udp.ulen = len(udp)
@@ -67,6 +70,8 @@ class ForwardingPlane:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             sock.sendto(bytes(udp), (dest_ip, dest_port))
 
+        return src_port
+
     async def listen_udp(self, src_port: int, callback: callable):
         log.info(f"listen_udp: src_port={src_port}")
         async with await anyio.create_udp_socket(
@@ -74,26 +79,12 @@ class ForwardingPlane:
         ) as sock:
             async for packet, (host, port) in sock:
                 log.info(f"received {packet} from {host}:{port}, calling callback")
-                callback(packet, (host, port))
+                await callback(packet, (host, port))
 
-        # anyio.run(self._listen_udp, src_port, callback)
-
-        # with self._sock(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        #     sock.bind(("0.0.0.0", src_port))
-        #     while True:
-        #         data, addr = sock.recvfrom(1024)
-        #         callback(data, addr)
-
-
-# if __name__ == "__main__":
-# import socket
-# listen_addr = "0.0.0.0"
-# listen_port = 520
-# sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-# sock.bind((listen_addr, listen_port))
-# print('asdf')
-# while True:
-#     data, addr = sock.recvfrom(1024)
-#     print(f"Received {data} from {addr}")
-#     time.sleep(10)
-#     sock.sendto(data, addr)
+    async def listen_udp_timed(
+        self, src_port: int, callback: callable, timeout_seconds: int
+    ):
+        try:
+            await asyncio.wait_for(self.listen_udp(src_port, callback), timeout_seconds)
+        except asyncio.TimeoutError:
+            log.info(f"listen_udp_timed: timeout_seconds={timeout_seconds}")

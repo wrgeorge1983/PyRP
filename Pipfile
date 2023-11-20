@@ -9,6 +9,7 @@ toml = "*"
 munch = "*"
 fastapi = "*"
 uvicorn = {extras = ["standard"], version = "*"}
+aiohttp = {extras = ["speedups"], version = "*"}
 
 [dev-packages]
 pytest = "*"

@@ -15,9 +15,9 @@ import time
 from typing import Literal, Optional, Type
 
 import dpkt
-from starlette.background import BackgroundTasks
 from typing_extensions import TypedDict
 
+from src.control_plane.clients.client_control_plane import RpCpClient
 from src.fp_interface import ForwardingPlane
 from src.config import Config
 from src.generic.rib import (
@@ -33,6 +33,12 @@ from src.system import SourceCode, RouteStatus, IPNetwork, IPAddress
 log = logging.getLogger(__name__)
 
 RIP_MAX_METRIC = 16
+RIP_ROUTE_TIMEOUT = 180
+RIP_ROUTE_GARBAGE_TIMER = 120
+# RIP_ROUTE_TIMEOUT = 10
+# RIP_ROUTE_GARBAGE_TIMER = 60
+RIP_ROUTE_GARBAGE_TIMEOUT = RIP_ROUTE_TIMEOUT + RIP_ROUTE_GARBAGE_TIMER
+RIP_HOUSEKEEPING_INTERVAL = 1
 
 
 class RIP1_RouteSpec(RouteSpec):
@@ -127,6 +133,7 @@ class RIP1_Route(Route):
 class RIP1_RPSpec(TypedDict):
     admin_distance: int
     default_metric: int
+    cp_id: Optional[str]
 
 
 class RIP1_FullRPSpec(RIP1_RPSpec):
@@ -150,6 +157,7 @@ class RIP1_RIB(RIB_Base):
             self._validate_fields(**route)
             route = self.route_type(**route)
 
+        self._table.discard(route)  # required to update routes?
         self._table.add(route)
 
     def remove(self, route: RIP1_RouteSpec | route_type):
@@ -163,9 +171,9 @@ class RIP1_RIB(RIB_Base):
 
 
 class RP_RIP1:
-    dest_ip = ipaddress.ip_address("255.255.255.255")
-    dest_port = 520
-    src_port = 520
+    default_dst_ip = ipaddress.ip_address("172.24.0.255")
+    default_dst_port = 520
+    default_src_port = 520
 
     def __init__(self, fp: ForwardingPlane, rp_interface: "RP_RIP1_Interface"):
         """This is the inner class for the protocol itself, responsible primarily for message passing to/from the FP"""
@@ -190,8 +198,16 @@ class RP_RIP1:
 
         return rte
 
-    def send_response(self):
-        log.info(f'sending response msg')
+    def send_response(
+        self, dst_ip: Optional[str] = None, dst_port: Optional[int] = None
+    ) -> int:
+        if dst_ip is None:
+            dst_ip = str(self.default_dst_ip)
+
+        if dst_port is None:
+            dst_port = self.default_dst_port
+
+        log.info(f"sending response msg")
         rtes = [
             self._rte_from_route(route) for route in self.rp_interface.export_routes()
         ]
@@ -203,24 +219,36 @@ class RP_RIP1:
         rip.auth = None
         rip.rtes = rtes
 
-        self.fp.send_udp(str(self.dest_ip), bytes(rip), self.dest_port, self.src_port)
+        return self.fp.send_udp(bytes(rip), dst_ip, dst_port, self.default_src_port)
 
-    def send_request(self):
-        log.info(f'sending request message')
+    def send_request(self) -> int:
+        log.info(f"sending request message")
         rip = dpkt.rip.RIP()
         rip.cmd = dpkt.rip.REQUEST
         rip.v = 1
         rip.rsvd = 0
         rip.auth = None
-        rip.rtes = []
 
-        self.fp.send_udp(str(self.dest_ip), bytes(rip), self.dest_port, self.src_port)
+        request_rte = dpkt.rip.RTE()
+        request_rte.family = 0
+        request_rte.addr = 0
+        request_rte.metric = RIP_MAX_METRIC
+
+        rip.rtes = [request_rte]
+
+        return self.fp.send_udp(
+            bytes(rip),
+            str(self.default_dst_ip),
+            self.default_dst_port,
+            # self.default_src_port,
+        )
 
     @staticmethod
     def handle_response(
-        rip_pkt: dpkt.rip.RIP, src_addr: tuple[str, int]
+        rip_pkt: dpkt.rip.RIP, src_tuple: tuple[str, int]
     ) -> list[RIP1_Route]:
         """In RIPv1 a 'Response' is always and exclusively the message that contains route entries"""
+        src_ip, src_port = src_tuple
         routes: list[RIP1_Route] = []
         for rte in rip_pkt.rtes:
             try:
@@ -231,12 +259,15 @@ class RP_RIP1:
                 )
                 classful_route = route.classful
                 if classful_route.metric >= RIP_MAX_METRIC:
-                    log.warning(f"ignoring route with metric >= {RIP_MAX_METRIC}")
-                    continue
+                    log.warning(f"poisoning route with metric >= {RIP_MAX_METRIC}")
+                    classful_route.metric = RIP_MAX_METRIC
+                    classful_route.status = RouteStatus.DOWN
+                else:
+                    classful_route.status = RouteStatus.UP
 
                 if classful_route.next_hop == ipaddress.ip_address("0.0.0.0"):
-                    log.debug(f"updating next_hop of 0.0.0.0 to {src_addr[0]}")
-                    classful_route.next_hop = ipaddress.ip_address(src_addr[0])
+                    log.debug(f"updating next_hop of 0.0.0.0 to {src_ip}")
+                    classful_route.next_hop = ipaddress.ip_address(src_ip)
 
                 log.info(f"classful route: {classful_route.as_json}")
                 routes.append(classful_route)
@@ -247,38 +278,68 @@ class RP_RIP1:
                 continue
         return routes
 
-    def handle_udp_bytes(self, data: bytes, addr: tuple[str, int]):
-        log.debug(f"handling_udp_bytes: {data=}, {addr=}")
+    async def handle_udp_bytes(self, data: bytes, src_tuple: tuple[str, int]):
+        src_ip, src_port = src_tuple
+        log.debug(f"handling_udp_bytes: {data=}, {src_tuple=}")
         rip_pkt = dpkt.rip.RIP(data)
         log.debug(f"received RIP packet: {rip_pkt.auth=}, {rip_pkt.data=}")
-        if addr[0] == self.fp.get_local_ip():
+        if src_ip == self.fp.get_local_ip():
             if self.rp_interface.reject_own_messages:
-                log.debug(f'ignoring own message!')
+                log.debug(f"ignoring own message!")
                 return
-            log.debug(f'processing message from self!!!')
+
+            log.debug(f"processing message from self!!!")
 
         match rip_pkt.cmd:
             case dpkt.rip.REQUEST:  # this type of message is requesting route advertisements
                 log.debug(f"received RIP request: {rip_pkt.data=}")
-                self.send_response()
+                self.send_response(dst_ip=src_ip, dst_port=src_port)
 
             case dpkt.rip.RESPONSE:  # this type of message is always for route advertisements (even event triggered ones)
                 log.debug(f"received RIP response: {rip_pkt.data=}")
-                routes = self.handle_response(rip_pkt, addr)
+                routes = self.handle_response(rip_pkt, src_tuple)
+                if not routes:
+                    log.debug(f"no routes to add")
+                    return
+
                 for route in routes:
                     self.rp_interface._learned_routes.add(route)
 
+                await self.rp_interface.refresh_rib(route_change=len(routes) > 0)
+
+                if any(route.metric == RIP_MAX_METRIC for route in routes):
+                    log.warning(
+                        f"received poisoned route(s): {[route.as_json for route in routes]}"
+                    )
+                    self.send_response(
+                        dst_ip=str(self.default_dst_ip), dst_port=self.default_dst_port
+                    )
             case _:
-                log.info(f"received RIP packet with unexpected command: {rip_pkt.cmd}")
+                log.warning(
+                    f"received RIP packet with unexpected command: {rip_pkt.cmd}"
+                )
 
         return
 
-    async def listen(self):
-        await self.fp.listen_udp(self.dest_port, self.handle_udp_bytes)
+    async def listen(self, src_port: Optional[int] = None):
+        if src_port is None:
+            src_port = self.default_src_port
+        await self.fp.listen_udp(src_port, self.handle_udp_bytes)
+
+    async def listen_timed(
+        self, src_port: Optional[int] = None, timeout_seconds: int = 0
+    ):
+        if timeout_seconds == 0:
+            await self.listen(src_port)  # no timeout
+        else:
+            await self.fp.listen_udp_timed(
+                src_port, self.handle_udp_bytes, timeout_seconds
+            )
 
 
 class RP_RIP1_Interface:
     """This is the outer interface for the routing protocol"""
+
     def __init__(
         self,
         fp: ForwardingPlane,
@@ -291,6 +352,9 @@ class RP_RIP1_Interface:
         advertisement_interval: int = 5,
         request_interval: int = 30,
         reject_own_messages: bool = False,
+        cp_id: str = None,
+        trigger_redistribution: bool = False,
+        cp_client: RpCpClient = None,
     ):
         self.fp = fp
         self._rib = RIP1_RIB()
@@ -310,18 +374,22 @@ class RP_RIP1_Interface:
         if redistribute_sla_in:
             self.redistribute_in_sources.append(SourceCode.SLA)
 
-        self._rp = RP_RIP1(self.fp, self)
         self.small_rand_sleeps = True
         self.reject_own_messages = reject_own_messages
+        self.trigger_redistribution = trigger_redistribution
+        self._rp = RP_RIP1(self.fp, self)
+        self.cp_id = cp_id
+        self._cp = cp_client
+        self._lock = asyncio.Lock()
 
     @staticmethod
     def small_sleep():
         duration_ms = random.randint(0, 300) / 1000
-        log.info(f'sleeping for {duration_ms} ms')
+        log.info(f"sleeping for {duration_ms} ms")
         time.sleep(duration_ms)
 
     @classmethod
-    def from_config(cls, config: Config, fp: ForwardingPlane):
+    def from_config(cls, config: Config, fp: ForwardingPlane, cp_id: str):
         rslt = cls(
             fp,
             admin_distance=config.rp_rip1["admin_distance"],
@@ -332,7 +400,10 @@ class RP_RIP1_Interface:
             redistribute_sla_metric=config.rp_rip1["redistribute_sla_metric"],
             advertisement_interval=config.rp_rip1["advertisement_interval"],
             request_interval=config.rp_rip1["request_interval"],
-            reject_own_messages=config.rp_rip1["reject_own_messages"]
+            reject_own_messages=config.rp_rip1["reject_own_messages"],
+            cp_client=RpCpClient(config.rp_rip1["cp_base_url"]),
+            cp_id=cp_id,
+            trigger_redistribution=config.rp_rip1["trigger_redistribution"],
         )
         return rslt
 
@@ -341,6 +412,7 @@ class RP_RIP1_Interface:
         return {
             "admin_distance": self.admin_distance,
             "default_metric": self.default_metric,
+            "cp_id": self.cp_id,
         }
 
     @property
@@ -353,6 +425,7 @@ class RP_RIP1_Interface:
                 route.as_json for route in self._redistributed_routes.items
             ],
             "learned_routes": [route.as_json for route in self._learned_routes.items],
+            "cp_id": self.cp_id,
         }
 
     @property
@@ -371,7 +444,9 @@ class RP_RIP1_Interface:
 
     def redistribute_out(self) -> list[RedistributeOutRoute]:
         routes = (
-            route for route in self._rib.items if route.route_source == SourceCode.RIP1
+            route
+            for route in self._rib.items
+            if route.route_source == SourceCode.RIP1 and route.metric < RIP_MAX_METRIC
         )
         best_routes: dict[IPNetwork, RIP1_Route] = dict()
         for route in routes:
@@ -390,67 +465,97 @@ class RP_RIP1_Interface:
             )
             rslt.append(RedistributeOutRoute(**json_route, strict=False))
         return rslt
-        # return [
-        #     RedistributeOutRoute(
-        #         **route.as_json,
-        #         admin_distance=self.admin_distance,
-        #         route_source=SourceCode.RIP1,
-        #     )
-        #     for route in best_routes.values()
-        # ]
 
-    def redistribute_in(
+    async def redistribute_in(
         self, route_specs: list[RedistributeInRouteSpec | RIP1_RouteSpec]
     ):
-        self._redistributed_routes = RIP1_RIB()
-        for route_spec in route_specs:
-            if "metric" not in route_spec:
-                route_spec["metric"] = self.redistribute_in_metrics.get(
-                    route_spec["route_source"], self.default_metric
-                )
-                route_spec["metric"] = min(route_spec["metric"], RIP_MAX_METRIC)
-            source = SourceCode(route_spec["route_source"])
-            if source not in self.redistribute_in_sources:
-                log.debug(
-                    f"skipping route {route_spec} because source {source} is not in {self.redistribute_in_sources}"
-                )
-                continue
+        async with self._lock:
+            self._redistributed_routes = RIP1_RIB()
+            for route_spec in route_specs:
+                if "metric" not in route_spec:
+                    route_spec["metric"] = self.redistribute_in_metrics.get(
+                        route_spec["route_source"], self.default_metric
+                    )
+                    route_spec["metric"] = min(route_spec["metric"], RIP_MAX_METRIC)
+                source = SourceCode(route_spec["route_source"])
+                if source not in self.redistribute_in_sources:
+                    log.debug(
+                        f"skipping route {route_spec} because source {source} is not in {self.redistribute_in_sources}"
+                    )
+                    continue
 
-            route = RIP1_Route(**route_spec)
-            route = route.classful
-            self._redistributed_routes.add(route)
+                route = RIP1_Route(**route_spec)
+                route = route.classful
+                self._redistributed_routes.add(route)
 
-    def refresh_rib(self):
-        self._rib = RIP1_RIB()
-        self._rib.import_routes(self._redistributed_routes.export_routes())
-        self._rib.import_routes(self._learned_routes.export_routes())
+    async def refresh_rib(self, route_change: bool = False):
+        async with self._lock:
+            self._rib = RIP1_RIB()
+            self._rib.import_routes(self._redistributed_routes.export_routes())
+            self._rib.import_routes(self._learned_routes.export_routes())
+
+            if route_change and self.trigger_redistribution:
+                asyncio.create_task(self._cp.redistribute(self.cp_id))
 
     async def send_response(self):
         self._rp.send_response()
 
-    async def send_request(self):
-        self._rp.send_request()
+    async def send_request(self) -> int:
+        return self._rp.send_request()
 
     async def listen(self):
         await self._rp.listen()
 
     async def run_advertisements(self):
-        log.info(f'in async def run_advertisements')
+        log.info(f"in async def run_advertisements")
         while True:
             await self.send_response()
             await asyncio.sleep(self.advertisement_interval)
 
     async def run_requests(self):
-        log.info(f'in async def run_requests')
+        log.info(f"in async def run_requests")
         while True:
-            await self.send_request()
-            await asyncio.sleep(self.request_interval)
+            port = await self.send_request()
+            log.info(f"request sent on port {port}")
+            log.info(f"listening on port {port}")
+            await self._rp.listen_timed(port, self.request_interval - 1)
+            await asyncio.sleep(1)  # finish out the request_interval
 
-    def run_protocol(self, background_tasks: BackgroundTasks):
-        log.info('about to listen')
+    async def check_routes(self):
+        log.info(f"in async def check_routes")
+        route_change = False
+        while True:
+            # check learned routes for expiration
+            for route in self._learned_routes.items:
+                if route.last_updated + RIP_ROUTE_GARBAGE_TIMEOUT < time.time():
+                    log.info(f"removing route {route.as_json}")
+                    self._learned_routes.remove(route)
+                    route_change = True
+                elif route.last_updated + RIP_ROUTE_TIMEOUT < time.time():
+                    if route.metric >= RIP_MAX_METRIC:
+                        continue  # don't bother with routes that are already maxed out
+
+                    log.info(f"marking route {route.as_json} as down")
+                    route.status = RouteStatus.DOWN
+                    route.metric = RIP_MAX_METRIC
+                    route_change = True
+
+            self.refresh_rib(route_change)
+
+            if route_change and self.trigger_redistribution:
+                # await self._cp.redistribute(self.cp_id)
+                route_change = False
+                asyncio.create_task(self._cp.redistribute(self.cp_id))
+
+            await asyncio.sleep(RIP_HOUSEKEEPING_INTERVAL)
+
+    def run_protocol(self):
+        log.info("about to listen")
 
         asyncio.create_task(self.listen())
         if self.request_interval > 0:
             asyncio.create_task(self.run_requests())
         if self.advertisement_interval > 0:
             asyncio.create_task(self.run_advertisements())
+        if RIP_HOUSEKEEPING_INTERVAL > 0:
+            asyncio.create_task(self.check_routes())

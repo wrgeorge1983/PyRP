@@ -55,24 +55,24 @@ def read_root():
 
 
 @app.get("/instances")
-def get_instances() -> dict[str, RIP1_RPSpec]:
+async def get_instances() -> dict[str, RIP1_RPSpec]:
     return {k: v.as_json for k, v in protocol_instances.items()}
 
 
 @app.get("/instances/{instance_id}")
-def get_protocol(instance_id: str) -> RIP1_RPSpec:
+async def get_protocol(instance_id: str) -> RIP1_RPSpec:
     rslt = get_protocol_instance(instance_id)
     return rslt.as_json
 
 
 @app.get("/instances/{instance_id}/full")
-def get_instance_full(instance_id: str) -> RIP1_FullRPSpec:
+async def get_instance_full(instance_id: str) -> RIP1_FullRPSpec:
     rslt = get_protocol_instance(instance_id)
     return rslt.full_as_json
 
 
 @app.post("/instances/new_from_config")
-def create_instance_from_config(filename: str):
+async def create_instance_from_config(filename: str, cp_id: Optional[str] = None):
     config = Config()
     try:
         config.load(filename)
@@ -81,14 +81,14 @@ def create_instance_from_config(filename: str):
 
     instance_id = generate_id()
     fp = ForwardingPlane()
-    protocol_instances[instance_id] = RP_RIP1_Interface.from_config(config, fp)
+    protocol_instances[instance_id] = RP_RIP1_Interface.from_config(config, fp, cp_id)
     global LATEST_INSTANCE_ID
     LATEST_INSTANCE_ID = instance_id
     return {"instance_id": instance_id}
 
 
 @app.delete("/instances/{instance_id}")
-def delete_instance(instance_id: str):
+async def delete_instance(instance_id: str):
     protocol_instances.pop(instance_id, None)
     global LATEST_INSTANCE_ID
     if LATEST_INSTANCE_ID == instance_id:
@@ -97,21 +97,21 @@ def delete_instance(instance_id: str):
 
 
 @app.get("/instances/{instance_id}/routes/rib")
-def get_rib_routes(instance_id: str):
+async def get_rib_routes(instance_id: str):
     instance = get_protocol_instance(instance_id)
     rslt = [route.as_json for route in instance.rib_routes]
     return rslt
 
 
 @app.post("/instances/{instance_id}/redistribute_in")
-def redistribute_in(instance_id: str, routes: list[RedistributeInRouteSpec]):
+async def redistribute_in(instance_id: str, routes: list[RedistributeInRouteSpec]):
     instance = get_protocol_instance(instance_id)
-    instance.redistribute_in(routes)
+    await instance.redistribute_in(routes)
     return {}
 
 
 @app.post("/instances/{instance_id}/redistribute_out")
-def redistribute_out(instance_id: str) -> list[RedistributeOutRouteSpec]:
+async def redistribute_out(instance_id: str) -> list[RedistributeOutRouteSpec]:
     instance = get_protocol_instance(instance_id)
 
     return list(
@@ -121,9 +121,9 @@ def redistribute_out(instance_id: str) -> list[RedistributeOutRouteSpec]:
 
 
 @app.post("/instances/{instance_id}/routes/rib/refresh")
-def refresh_rib(instance_id: str):
+async def refresh_rib(instance_id: str):
     instance = get_protocol_instance(instance_id)
-    instance.refresh_rib()
+    await instance.refresh_rib()
     return [route.as_json for route in instance.rib_routes]
 
 
@@ -145,10 +145,10 @@ async def listen(instance_id: str, background_tasks: BackgroundTasks):
 
 
 @app.post("/instances/{instance_id}/run")
-async def run_protocol(instance_id: str, background_tasks: BackgroundTasks):
+async def run_protocol(instance_id: str):
     """run the protocol forever, because who knows how to stop it!?"""
     instance = get_protocol_instance(instance_id)
-    instance.run_protocol(background_tasks)
+    instance.run_protocol()
     return {"instance_id": instance_id}
 
 

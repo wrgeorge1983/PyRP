@@ -20,15 +20,18 @@ redistribute_static_in = true
 redistribute_static_metric = 5
 redistribute_sla_in = true
 redistribute_sla_metric = 1
-advertisement_interval = 0
-request_interval = 10
-reject_own_messages = false
+advertisement_interval = 30
+request_interval = 120
+reject_own_messages = true
+trigger_redistribution = true
+cp_base_url = "http://localhost:5010"  # default port is 5010
 
 [rp_sla]
 enabled = true
 # port = 5023  # default port is 5023
 admin_distance = 10
 threshold_measure_interval = 60
+trigger_redistribution = true
 
 [[rp_sla.routes]]
 prefix = "0.0.0.0/0"
