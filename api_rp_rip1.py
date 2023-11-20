@@ -106,7 +106,7 @@ async def get_rib_routes(instance_id: str):
 @app.post("/instances/{instance_id}/redistribute_in")
 async def redistribute_in(instance_id: str, routes: list[RedistributeInRouteSpec]):
     instance = get_protocol_instance(instance_id)
-    instance.redistribute_in(routes)
+    await instance.redistribute_in(routes)
     return {}
 
 
@@ -121,9 +121,9 @@ async def redistribute_out(instance_id: str) -> list[RedistributeOutRouteSpec]:
 
 
 @app.post("/instances/{instance_id}/routes/rib/refresh")
-def refresh_rib(instance_id: str):
+async def refresh_rib(instance_id: str):
     instance = get_protocol_instance(instance_id)
-    instance.refresh_rib()
+    await instance.refresh_rib()
     return [route.as_json for route in instance.rib_routes]
 
 

@@ -278,7 +278,7 @@ class RP_RIP1:
                 continue
         return routes
 
-    def handle_udp_bytes(self, data: bytes, src_tuple: tuple[str, int]):
+    async def handle_udp_bytes(self, data: bytes, src_tuple: tuple[str, int]):
         src_ip, src_port = src_tuple
         log.debug(f"handling_udp_bytes: {data=}, {src_tuple=}")
         rip_pkt = dpkt.rip.RIP(data)
@@ -298,9 +298,15 @@ class RP_RIP1:
             case dpkt.rip.RESPONSE:  # this type of message is always for route advertisements (even event triggered ones)
                 log.debug(f"received RIP response: {rip_pkt.data=}")
                 routes = self.handle_response(rip_pkt, src_tuple)
+                if not routes:
+                    log.debug(f"no routes to add")
+                    return
+
                 for route in routes:
                     self.rp_interface._learned_routes.add(route)
-                self.rp_interface.refresh_rib(route_change=len(routes) > 0)
+
+                await self.rp_interface.refresh_rib(route_change=len(routes) > 0)
+
                 if any(route.metric == RIP_MAX_METRIC for route in routes):
                     log.warning(
                         f"received poisoned route(s): {[route.as_json for route in routes]}"
@@ -374,6 +380,7 @@ class RP_RIP1_Interface:
         self._rp = RP_RIP1(self.fp, self)
         self.cp_id = cp_id
         self._cp = cp_client
+        self._lock = asyncio.Lock()
 
     @staticmethod
     def small_sleep():
@@ -459,34 +466,36 @@ class RP_RIP1_Interface:
             rslt.append(RedistributeOutRoute(**json_route, strict=False))
         return rslt
 
-    def redistribute_in(
+    async def redistribute_in(
         self, route_specs: list[RedistributeInRouteSpec | RIP1_RouteSpec]
     ):
-        self._redistributed_routes = RIP1_RIB()
-        for route_spec in route_specs:
-            if "metric" not in route_spec:
-                route_spec["metric"] = self.redistribute_in_metrics.get(
-                    route_spec["route_source"], self.default_metric
-                )
-                route_spec["metric"] = min(route_spec["metric"], RIP_MAX_METRIC)
-            source = SourceCode(route_spec["route_source"])
-            if source not in self.redistribute_in_sources:
-                log.debug(
-                    f"skipping route {route_spec} because source {source} is not in {self.redistribute_in_sources}"
-                )
-                continue
+        async with self._lock:
+            self._redistributed_routes = RIP1_RIB()
+            for route_spec in route_specs:
+                if "metric" not in route_spec:
+                    route_spec["metric"] = self.redistribute_in_metrics.get(
+                        route_spec["route_source"], self.default_metric
+                    )
+                    route_spec["metric"] = min(route_spec["metric"], RIP_MAX_METRIC)
+                source = SourceCode(route_spec["route_source"])
+                if source not in self.redistribute_in_sources:
+                    log.debug(
+                        f"skipping route {route_spec} because source {source} is not in {self.redistribute_in_sources}"
+                    )
+                    continue
 
-            route = RIP1_Route(**route_spec)
-            route = route.classful
-            self._redistributed_routes.add(route)
+                route = RIP1_Route(**route_spec)
+                route = route.classful
+                self._redistributed_routes.add(route)
 
-    def refresh_rib(self, route_change: bool = False):
-        self._rib = RIP1_RIB()
-        self._rib.import_routes(self._redistributed_routes.export_routes())
-        self._rib.import_routes(self._learned_routes.export_routes())
+    async def refresh_rib(self, route_change: bool = False):
+        async with self._lock:
+            self._rib = RIP1_RIB()
+            self._rib.import_routes(self._redistributed_routes.export_routes())
+            self._rib.import_routes(self._learned_routes.export_routes())
 
-        if route_change and self.trigger_redistribution:
-            asyncio.create_task(self._cp.redistribute(self.cp_id))
+            if route_change and self.trigger_redistribution:
+                asyncio.create_task(self._cp.redistribute(self.cp_id))
 
     async def send_response(self):
         self._rp.send_response()

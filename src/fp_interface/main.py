@@ -79,7 +79,7 @@ class ForwardingPlane:
         ) as sock:
             async for packet, (host, port) in sock:
                 log.info(f"received {packet} from {host}:{port}, calling callback")
-                callback(packet, (host, port))
+                await callback(packet, (host, port))
 
     async def listen_udp_timed(
         self, src_port: int, callback: callable, timeout_seconds: int
