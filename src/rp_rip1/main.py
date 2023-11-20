@@ -437,7 +437,9 @@ class RP_RIP1_Interface:
 
     def redistribute_out(self) -> list[RedistributeOutRoute]:
         routes = (
-            route for route in self._rib.items if route.route_source == SourceCode.RIP1
+            route
+            for route in self._rib.items
+            if route.route_source == SourceCode.RIP1 and route.metric < RIP_MAX_METRIC
         )
         best_routes: dict[IPNetwork, RIP1_Route] = dict()
         for route in routes:
