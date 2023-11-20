@@ -43,6 +43,7 @@ def rp_rip1_defaults() -> dict[str, int | list | str]:
         "request_interval": 60,
         "reject_own_messages": False,
         "trigger_redistribution": False,
+        "cp_base_url": "http://localhost:5010",
     }
     return rp_rip1_config
 

@@ -55,24 +55,24 @@ def read_root():
 
 
 @app.get("/instances")
-def get_instances() -> dict[str, RIP1_RPSpec]:
+async def get_instances() -> dict[str, RIP1_RPSpec]:
     return {k: v.as_json for k, v in protocol_instances.items()}
 
 
 @app.get("/instances/{instance_id}")
-def get_protocol(instance_id: str) -> RIP1_RPSpec:
+async def get_protocol(instance_id: str) -> RIP1_RPSpec:
     rslt = get_protocol_instance(instance_id)
     return rslt.as_json
 
 
 @app.get("/instances/{instance_id}/full")
-def get_instance_full(instance_id: str) -> RIP1_FullRPSpec:
+async def get_instance_full(instance_id: str) -> RIP1_FullRPSpec:
     rslt = get_protocol_instance(instance_id)
     return rslt.full_as_json
 
 
 @app.post("/instances/new_from_config")
-def create_instance_from_config(filename: str, cp_id: Optional[str] = None):
+async def create_instance_from_config(filename: str, cp_id: Optional[str] = None):
     config = Config()
     try:
         config.load(filename)
@@ -88,7 +88,7 @@ def create_instance_from_config(filename: str, cp_id: Optional[str] = None):
 
 
 @app.delete("/instances/{instance_id}")
-def delete_instance(instance_id: str):
+async def delete_instance(instance_id: str):
     protocol_instances.pop(instance_id, None)
     global LATEST_INSTANCE_ID
     if LATEST_INSTANCE_ID == instance_id:
@@ -97,21 +97,21 @@ def delete_instance(instance_id: str):
 
 
 @app.get("/instances/{instance_id}/routes/rib")
-def get_rib_routes(instance_id: str):
+async def get_rib_routes(instance_id: str):
     instance = get_protocol_instance(instance_id)
     rslt = [route.as_json for route in instance.rib_routes]
     return rslt
 
 
 @app.post("/instances/{instance_id}/redistribute_in")
-def redistribute_in(instance_id: str, routes: list[RedistributeInRouteSpec]):
+async def redistribute_in(instance_id: str, routes: list[RedistributeInRouteSpec]):
     instance = get_protocol_instance(instance_id)
     instance.redistribute_in(routes)
     return {}
 
 
 @app.post("/instances/{instance_id}/redistribute_out")
-def redistribute_out(instance_id: str) -> list[RedistributeOutRouteSpec]:
+async def redistribute_out(instance_id: str) -> list[RedistributeOutRouteSpec]:
     instance = get_protocol_instance(instance_id)
 
     return list(

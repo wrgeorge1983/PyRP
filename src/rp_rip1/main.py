@@ -15,9 +15,9 @@ import time
 from typing import Literal, Optional, Type
 
 import dpkt
-from starlette.background import BackgroundTasks
 from typing_extensions import TypedDict
 
+from src.control_plane.clients.client_control_plane import RpCpClient
 from src.fp_interface import ForwardingPlane
 from src.config import Config
 from src.generic.rib import (
@@ -33,7 +33,12 @@ from src.system import SourceCode, RouteStatus, IPNetwork, IPAddress
 log = logging.getLogger(__name__)
 
 RIP_MAX_METRIC = 16
-RIP_LISTEN_INTERVAL = 5
+RIP_ROUTE_TIMEOUT = 180
+RIP_ROUTE_GARBAGE_TIMER = 120
+# RIP_ROUTE_TIMEOUT = 10
+# RIP_ROUTE_GARBAGE_TIMER = 60
+RIP_ROUTE_GARBAGE_TIMEOUT = RIP_ROUTE_TIMEOUT + RIP_ROUTE_GARBAGE_TIMER
+RIP_HOUSEKEEPING_INTERVAL = 1
 
 
 class RIP1_RouteSpec(RouteSpec):
@@ -291,7 +296,7 @@ class RP_RIP1:
                 routes = self.handle_response(rip_pkt, src_tuple)
                 for route in routes:
                     self.rp_interface._learned_routes.add(route)
-                self.rp_interface.refresh_rib()
+                self.rp_interface.refresh_rib(route_change=len(routes) > 0)
             case _:
                 log.info(f"received RIP packet with unexpected command: {rip_pkt.cmd}")
 
@@ -330,6 +335,7 @@ class RP_RIP1_Interface:
         reject_own_messages: bool = False,
         cp_id: str = None,
         trigger_redistribution: bool = False,
+        cp_client: RpCpClient = None,
     ):
         self.fp = fp
         self._rib = RIP1_RIB()
@@ -354,6 +360,7 @@ class RP_RIP1_Interface:
         self.trigger_redistribution = trigger_redistribution
         self._rp = RP_RIP1(self.fp, self)
         self.cp_id = cp_id
+        self._cp = cp_client
 
     @staticmethod
     def small_sleep():
@@ -374,6 +381,7 @@ class RP_RIP1_Interface:
             advertisement_interval=config.rp_rip1["advertisement_interval"],
             request_interval=config.rp_rip1["request_interval"],
             reject_own_messages=config.rp_rip1["reject_own_messages"],
+            cp_client=RpCpClient(config.rp_rip1["cp_base_url"]),
             cp_id=cp_id,
             trigger_redistribution=config.rp_rip1["trigger_redistribution"],
         )
@@ -457,10 +465,13 @@ class RP_RIP1_Interface:
             route = route.classful
             self._redistributed_routes.add(route)
 
-    def refresh_rib(self):
+    def refresh_rib(self, route_change: bool = False):
         self._rib = RIP1_RIB()
         self._rib.import_routes(self._redistributed_routes.export_routes())
         self._rib.import_routes(self._learned_routes.export_routes())
+
+        if route_change and self.trigger_redistribution:
+            asyncio.create_task(self._cp.redistribute(self.cp_id))
 
     async def send_response(self):
         self._rp.send_response()
@@ -486,6 +497,34 @@ class RP_RIP1_Interface:
             await self._rp.listen_timed(port, self.request_interval - 1)
             await asyncio.sleep(1)  # finish out the request_interval
 
+    async def check_routes(self):
+        log.info(f"in async def check_routes")
+        route_change = False
+        while True:
+            # check learned routes for expiration
+            for route in self._learned_routes.items:
+                if route.last_updated + RIP_ROUTE_GARBAGE_TIMEOUT < time.time():
+                    log.info(f"removing route {route.as_json}")
+                    self._learned_routes.remove(route)
+                    route_change = True
+                elif route.last_updated + RIP_ROUTE_TIMEOUT < time.time():
+                    if route.metric >= RIP_MAX_METRIC:
+                        continue  # don't bother with routes that are already maxed out
+
+                    log.info(f"marking route {route.as_json} as down")
+                    route.status = RouteStatus.DOWN
+                    route.metric = RIP_MAX_METRIC
+                    route_change = True
+
+            self.refresh_rib(route_change)
+
+            if route_change and self.trigger_redistribution:
+                # await self._cp.redistribute(self.cp_id)
+                route_change = False
+                asyncio.create_task(self._cp.redistribute(self.cp_id))
+
+            await asyncio.sleep(RIP_HOUSEKEEPING_INTERVAL)
+
     def run_protocol(self):
         log.info("about to listen")
 
@@ -494,3 +533,5 @@ class RP_RIP1_Interface:
             asyncio.create_task(self.run_requests())
         if self.advertisement_interval > 0:
             asyncio.create_task(self.run_advertisements())
+        if RIP_HOUSEKEEPING_INTERVAL > 0:
+            asyncio.create_task(self.check_routes())
