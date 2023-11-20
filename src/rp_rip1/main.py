@@ -157,6 +157,7 @@ class RIP1_RIB(RIB_Base):
             self._validate_fields(**route)
             route = self.route_type(**route)
 
+        self._table.discard(route)  # required to update routes?
         self._table.add(route)
 
     def remove(self, route: RIP1_RouteSpec | route_type):
@@ -258,8 +259,11 @@ class RP_RIP1:
                 )
                 classful_route = route.classful
                 if classful_route.metric >= RIP_MAX_METRIC:
-                    log.warning(f"ignoring route with metric >= {RIP_MAX_METRIC}")
-                    continue
+                    log.warning(f"poisoning route with metric >= {RIP_MAX_METRIC}")
+                    classful_route.metric = RIP_MAX_METRIC
+                    classful_route.status = RouteStatus.DOWN
+                else:
+                    classful_route.status = RouteStatus.UP
 
                 if classful_route.next_hop == ipaddress.ip_address("0.0.0.0"):
                     log.debug(f"updating next_hop of 0.0.0.0 to {src_ip}")
@@ -297,8 +301,17 @@ class RP_RIP1:
                 for route in routes:
                     self.rp_interface._learned_routes.add(route)
                 self.rp_interface.refresh_rib(route_change=len(routes) > 0)
+                if any(route.metric == RIP_MAX_METRIC for route in routes):
+                    log.warning(
+                        f"received poisoned route(s): {[route.as_json for route in routes]}"
+                    )
+                    self.send_response(
+                        dst_ip=str(self.default_dst_ip), dst_port=self.default_dst_port
+                    )
             case _:
-                log.info(f"received RIP packet with unexpected command: {rip_pkt.cmd}")
+                log.warning(
+                    f"received RIP packet with unexpected command: {rip_pkt.cmd}"
+                )
 
         return
 
