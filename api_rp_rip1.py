@@ -145,10 +145,10 @@ async def listen(instance_id: str, background_tasks: BackgroundTasks):
 
 
 @app.post("/instances/{instance_id}/run")
-async def run_protocol(instance_id: str, background_tasks: BackgroundTasks):
+async def run_protocol(instance_id: str):
     """run the protocol forever, because who knows how to stop it!?"""
     instance = get_protocol_instance(instance_id)
-    instance.run_protocol(background_tasks)
+    instance.run_protocol()
     return {"instance_id": instance_id}
 
 

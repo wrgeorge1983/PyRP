@@ -17,7 +17,10 @@ gateway.
     ensures that we don't push updates back to originating protocol
 * I feel like we require locks at this point to ensure protocol doesn't have to juggle (near) simultaneous updates from 
     CP and neighboring routers
+* When redistributing from a protocol, we should first purge all existing routes from that protocol, so any rescinded routes are removed.
 
 
 # Timing
 * The timers are not right yet. there's whole parts of that we're not doing yet
+* the de-sync offsent for the timer 
+* need to periodically check to see if routes have timed out

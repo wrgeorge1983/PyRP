@@ -435,14 +435,6 @@ class RP_RIP1_Interface:
             )
             rslt.append(RedistributeOutRoute(**json_route, strict=False))
         return rslt
-        # return [
-        #     RedistributeOutRoute(
-        #         **route.as_json,
-        #         admin_distance=self.admin_distance,
-        #         route_source=SourceCode.RIP1,
-        #     )
-        #     for route in best_routes.values()
-        # ]
 
     def redistribute_in(
         self, route_specs: list[RedistributeInRouteSpec | RIP1_RouteSpec]
@@ -490,10 +482,11 @@ class RP_RIP1_Interface:
         while True:
             port = await self.send_request()
             log.info(f"request sent on port {port}")
-            await self._rp.listen_timed(port, self.request_interval - 1)
             log.info(f"listening on port {port}")
+            await self._rp.listen_timed(port, self.request_interval - 1)
+            await asyncio.sleep(1)  # finish out the request_interval
 
-    def run_protocol(self, background_tasks: BackgroundTasks):
+    def run_protocol(self):
         log.info("about to listen")
 
         asyncio.create_task(self.listen())

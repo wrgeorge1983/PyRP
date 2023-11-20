@@ -68,14 +68,15 @@ class ControlPlane:
 
         rslt = cls(config.control_plane["hostname"], rp_sla_client, rp_rip1_client)
         rslt.config = config
-        rslt.initialize_rp_sla(instance_id=instance_id)
-        rslt.initialize_rp_rip1(instance_id=instance_id)
 
         for route in config.control_plane["static_routes"]:
             route: CP_StaticRouteSpec
             route["route_source"] = SourceCode.STATIC
             route.setdefault("admin_distance", 1)
             rslt.add_static_route(route)
+
+        rslt.initialize_rp_sla(instance_id=instance_id)
+        rslt.initialize_rp_rip1(instance_id=instance_id)
 
         return rslt
 
