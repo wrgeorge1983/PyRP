@@ -63,6 +63,13 @@ This will instantiate the control plane.  Given the config, it will also reach o
 From there you can interact with either of them via their respective APIs.  For now you're best looking at the routes defined in
 `api_control_plane.py` and `api_rp_sla.py` to see what's available.
 
+## PyRP Monitor
+There is a simple cli tool for interacting with the control plane.
+```bash
+❯ pipenv run python cli.py 
+```
+![PyRP Monitor](./demo.gif)
+
 The best "demo" workflow that exists now is: 
 
 POST to `instances/new_from_config` with `filename` query parameter. Get the CP Instance ID.  
