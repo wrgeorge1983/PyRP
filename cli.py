@@ -1,4 +1,4 @@
-from src.cli.control_plane_app import ControlPlaneApp
+from src.cli.pyrp_monitor_app import PyrpMonitor
 
 # route_entries = [
 #     ("prefix", "next_hop", "route_source", "admin_distance", "status", "last_updated"),
@@ -8,5 +8,5 @@ from src.cli.control_plane_app import ControlPlaneApp
 
 
 if __name__ == "__main__":
-    app = ControlPlaneApp()
+    app = PyrpMonitor()
     app.run()

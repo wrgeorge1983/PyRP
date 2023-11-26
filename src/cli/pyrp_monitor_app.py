@@ -5,7 +5,7 @@ from textual.command import Provider, Hits, Hit
 from textual.containers import Container
 from textual.widgets import Header, Footer, RichLog, DataTable
 
-from .cli import (
+from .state import (
     state,
     sla_rib_table_fields,
     http_errors,
@@ -17,17 +17,17 @@ from .TitledTable import LiveTable
 commands = {}
 
 
-def rip_rib_refresh(app: "ControlPlaneApp"):
+def rip_rib_refresh(app: "PyrpMonitor"):
     app.user_log("Refreshing RIP RIB")
     # state.rip_client.refresh_rib("latest")
     app.populate_rip_rib()
 
 
-def watch_tables(app: "ControlPlaneApp"):
+def watch_tables(app: "PyrpMonitor"):
     app.user_log("Watching Tables")
     app.start_watch_tables()
     
-def stop_watch_tables(app: "ControlPlaneApp"):
+def stop_watch_tables(app: "PyrpMonitor"):
     app.user_log("Stopped Watching Tables")
     app.stop_watch_tables()
 
@@ -48,7 +48,7 @@ class CPCommandPalette(Provider):
                 yield Hit(score, matcher.highlight(command), partial(func, app))
 
 
-class ControlPlaneApp(App):
+class PyrpMonitor(App):
     CSS_PATH = "layout.tcss"
     BINDINGS = [
         ("d", "toggle_dark", "Toggle Dark Mode"),

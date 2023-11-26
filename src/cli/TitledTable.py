@@ -5,7 +5,7 @@ from textual.app import ComposeResult
 from textual.reactive import Reactive
 from textual.widgets import Static, Label, DataTable
 
-from .cli import http_errors
+from .state import http_errors
 
 
 class LiveTable(Static):
