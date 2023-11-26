@@ -8,19 +8,24 @@ Set Height 600
 Set FontSize 12
 Set Padding 5
 
-Type "pipenv run python cli.py"
+Sleep 2s
+Type "py"
+Backspace
+Type "ipenv run python cli.py"
 Enter
-Sleep 500ms
+Sleep 1s
 Type "w"
+Sleep 2.5s
 Type "n"
-Sleep 1s
+Sleep 3.5s
 Type "p"
-Sleep 1s
+Sleep 1.5s
 Type "e"
-Sleep 5s
+Sleep 3.5s
 Type "p"
-Sleep 4s
+Sleep 3.5s
 Ctrl+R
-Sleep 3s
+Sleep 12s
 Type "q"
-Escape
+Sleep 2.5s
+

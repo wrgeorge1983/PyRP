@@ -87,6 +87,8 @@ class ControlPlaneApp(App):
         cp_table = self.query_one("#CP_RIB")
         await cp_table.update_data()
 
+    # def on_key(self, event):
+    #     self.user_log(f"Key pressed: {event.key}")
 
     def action_toggle_dark(self) -> None:
         self.dark = not self.dark
@@ -99,6 +101,7 @@ class ControlPlaneApp(App):
             table.paused = not table.paused
 
     async def action_redistribute(self):
+        self.user_log("Triggering Redistribution")
         try:
             await state.cp_client.redistribute("latest")
         except http_errors as e:

@@ -487,6 +487,7 @@ class RP_RIP1_Interface:
                 route = RIP1_Route(**route_spec)
                 route = route.classful
                 self._redistributed_routes.add(route)
+        await self.refresh_rib(route_change=False)
 
     async def refresh_rib(self, route_change: bool = False):
         async with self._lock:
