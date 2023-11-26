@@ -1,0 +1,19 @@
+#app-grid {
+    layout: grid;
+    grid-size: 2;  /* two columns */
+    grid-columns: 1fr;
+    grid-rows: 1fr;
+}
+
+.richtable {
+    height: 100%;
+}
+.box {
+    height: 100%;
+    width: 1fr;
+    border: solid green;
+}
+
+.box-2 {
+    column-span: 2;
+}

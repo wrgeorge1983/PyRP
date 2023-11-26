@@ -27,8 +27,9 @@ class State:
         rslt.next_proto()
         return rslt
 
-    def next_proto(self):
-        self.proto_table = next(self._proto_tables)
+    def next_proto(self) -> str:
+        rslt = self.proto_table = next(self._proto_tables)
+        return rslt
 
     async def get_cp_rib_entries(self) -> list[list[str]]:
         route_entries = await self.cp_client.get_rib_routes("latest")
