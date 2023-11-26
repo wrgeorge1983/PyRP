@@ -142,9 +142,9 @@ def refresh_rib(instance_id: str):
 
 
 @app.post("/instances/{instance_id}/rp_sla/evaluate_routes")
-def evaluate_routes(instance_id: str):
+async def evaluate_routes(instance_id: str):
     instance = get_protocol_instance(instance_id)
-    instance.rp_sla_evaluate_routes()
+    await instance.rp_sla_evaluate_routes()
     return instance.as_json
 
 

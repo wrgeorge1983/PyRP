@@ -10,10 +10,12 @@ munch = "*"
 fastapi = "*"
 uvicorn = {extras = ["standard"], version = "*"}
 aiohttp = {extras = ["speedups"], version = "*"}
+textual = "*"
 
 [dev-packages]
 pytest = "*"
 pytest-mock = "*"
+textual-dev = "*"
 
 [requires]
 python_version = "3.11"

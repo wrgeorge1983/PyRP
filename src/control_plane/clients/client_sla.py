@@ -42,7 +42,7 @@ class RpSlaClient(BaseClient):
         response.raise_for_status()
         return response.json()
 
-    def get_rib_routes(self, instance_id):
+    async def get_rib_routes(self, instance_id):
         response = self.get(f"/instances/{instance_id}/routes/rib")
         response.raise_for_status()
         return response.json()
@@ -57,7 +57,6 @@ class RpSlaClient(BaseClient):
         response.raise_for_status()
         return response.json()
 
-    def evaluate_routes(self, instance_id):
-        response = self.post(f"/instances/{instance_id}/evaluate_routes")
-        response.raise_for_status()
-        return response.json()
+    async def evaluate_routes(self, instance_id):
+        response = await self.apost(f"/instances/{instance_id}/evaluate_routes")
+        return response
