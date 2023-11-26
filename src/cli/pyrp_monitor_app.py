@@ -49,6 +49,7 @@ class CPCommandPalette(Provider):
 
 
 class PyrpMonitor(App):
+    TITLE = "PyRP Monitor"
     CSS_PATH = "layout.tcss"
     BINDINGS = [
         ("d", "toggle_dark", "Toggle Dark Mode"),
@@ -87,8 +88,8 @@ class PyrpMonitor(App):
         cp_table = self.query_one("#CP_RIB")
         await cp_table.update_data()
 
-    # def on_key(self, event):
-    #     self.user_log(f"Key pressed: {event.key}")
+    def on_key(self, event):
+        self.user_log(f"Key pressed: {event.key}")
 
     def action_toggle_dark(self) -> None:
         self.dark = not self.dark
