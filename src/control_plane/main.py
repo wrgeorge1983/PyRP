@@ -161,9 +161,9 @@ class ControlPlane:
                 best_routes[route.prefix] = route
         return set(best_routes.values())
 
-    def rp_sla_evaluate_routes(self):
+    async def rp_sla_evaluate_routes(self):
         if self.rp_sla_enabled:
-            return self.rp_sla_client.evaluate_routes(self.rp_sla_instance_id)
+            return await self.rp_sla_client.evaluate_routes(self.rp_sla_instance_id)
         return {"error": "RP_SLA not enabled"}
 
     @property

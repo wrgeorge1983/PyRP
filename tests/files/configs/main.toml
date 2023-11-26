@@ -35,7 +35,7 @@ trigger_redistribution = true
 
 [[rp_sla.routes]]
 prefix = "0.0.0.0/0"
-next_hop = "1.1.1.1"
+next_hop = "172.26.189.129"
 priority = 1
 threshold_ms = 1
 

@@ -41,10 +41,9 @@ class RpRip1Client(BaseClient):
         response.raise_for_status()
         return response.json()
 
-    def get_rib_routes(self, instance_id):
-        response = self.get(f"/instances/{instance_id}/routes/rib")
-        response.raise_for_status()
-        return response.json()
+    async def get_rib_routes(self, instance_id):
+        response = await self.aget(f"/instances/{instance_id}/routes/rib")
+        return response
 
     def get_best_routes(self, instance_id):
         response = self.get(f"/instances/{instance_id}/best_routes")
